@@ -9,6 +9,8 @@
 | Date | Time | Description |
 | ---- | ---- | ----------- |
 
+## Class notes
+
 ## Exercises
 
 ## Findings

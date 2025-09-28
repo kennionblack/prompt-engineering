@@ -1,0 +1,47 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: scraper_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: scraper_root_pass
+      MYSQL_DATABASE: scraper_db
+      MYSQL_USER: scraper_user
+      MYSQL_PASSWORD: scraper_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - scraper_network
+
+  scraper:
+    build: .
+    container_name: scraper_app
+    env_file:
+      - ../../.env  # Load .env from repository root
+    environment:
+      - DB_CONNECTION=mysql://scraper_user:scraper_pass@mysql:3306/scraper_db
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
+    networks:
+      - scraper_network
+    # Keep container running for interactive use
+    tty: true
+    stdin_open: true
+
+networks:
+  scraper_network:
+    driver: bridge
+
+volumes:
+  mysql_data:

@@ -5,9 +5,18 @@ import json
 import os
 import requests
 from urllib.parse import urlparse
+from datetime import datetime
 
 from openai import AsyncOpenAI
 from database_tools import DatabaseTools
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder for datetime objects."""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 class PromptTextInsertion:
@@ -90,15 +99,24 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
     print("Creating optimal scraping configuration...")
     config = scraper.suggest_config(analysis)
 
-    print("Extracting structured data from website...")
+    print("Fetching raw HTML content for AI analysis...")
+    # Get raw HTML content instead of processed text for better AI analysis
+    raw_soup = scraper.fetch_page(url)
+    if not raw_soup:
+        print("Failed to fetch raw HTML content")
+        return False
+    
+    # Extract basic info but keep raw HTML for analysis
     scraped_data = scraper.scrape_multiple([url], config)
-
     if not scraped_data:
-        print("Failed to extract data from website")
+        print("Failed to extract basic data from website")
         return False
 
     data = scraped_data[0]
-
+    
+    # Get raw HTML content for AI to analyze
+    raw_html_content = str(raw_soup)
+    
     # Use the build_scraper_prompt.md file as the system prompt
     build_prompt_text = Path("build_scraper_prompt.md").read_text()
     build_prompt = PromptTextInsertion.replace_keywords(
@@ -106,7 +124,7 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
         {
             "URL": url,
             "TITLE": data.title,
-            "CONTENT": data.content[:2000],
+            "CONTENT": raw_html_content[:5000],  # Provide more HTML content for analysis
             "METADATA": json.dumps(data.metadata, indent=2),
             "SCRAPED_AT": data.scraped_at,
         },
@@ -118,8 +136,9 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
     history = [{"role": "system", "content": build_prompt}]
 
     from database_tools import db_tool_box
+
     response = await client.responses.create(
-        input=history, model="gpt-5-mini", tools=db_tool_box.tools
+        input=history, model="gpt-4o-mini", tools=db_tool_box.tools
     )
 
     history += response.output
@@ -128,14 +147,16 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
     for item in response.output:
         if item.type == "function_call":
             print(f">>> Calling {item.name} with args {item.arguments}")
-            if func := db_tool_box.get_tool_function(item.name):
-                result = func(**json.loads(item.arguments))
+            # Call the method on the db_tools instance instead of the unbound function
+            if hasattr(db_tools, item.name):
+                method = getattr(db_tools, item.name)
+                result = method(**json.loads(item.arguments))
                 print(f">>> {item.name} returned {result}")
                 history.append(
                     {
                         "type": "function_call_output",
                         "call_id": item.call_id,
-                        "output": json.dumps(result),
+                        "output": json.dumps(result, cls=DateTimeEncoder),
                     }
                 )
 
@@ -156,7 +177,7 @@ async def question_to_sql_workflow(question: str, db_tools: DatabaseTools) -> tu
     schema = schema_result["schema"]
 
     # Format schema for prompt
-    schema_text = json.dumps(schema, indent=2)
+    schema_text = json.dumps(schema, indent=2, cls=DateTimeEncoder)
 
     # Get sample data for tables
     tables_output = {"tables": []}
@@ -164,7 +185,7 @@ async def question_to_sql_workflow(question: str, db_tools: DatabaseTools) -> tu
         if table["sample_rows"]:
             tables_output["tables"].append({"name": table["name"], "rows": table["sample_rows"]})
 
-    tables_output_text = json.dumps(tables_output, indent=2)
+    tables_output_text = json.dumps(tables_output, indent=2, cls=DateTimeEncoder)
 
     # Prepare the convert_question_to_sql prompt
     sql_prompt_text = Path("convert_question_to_sql.md").read_text()
@@ -180,13 +201,14 @@ async def question_to_sql_workflow(question: str, db_tools: DatabaseTools) -> tu
 
         history = [{"role": "system", "content": sql_prompt}]
 
-        response = await client.responses.create(input=history, model="gpt-5-mini")
+        response = await client.responses.create(input=history, model="gpt-4o-mini")
 
         sql_query = response.output_text.strip()
         print(f"Generated SQL: {sql_query}")
 
         # Execute the query
         query_result = db_tools.execute_query(sql_query)
+        print(f"Raw SQL Response: {query_result}")
 
         if query_result["success"]:
             return sql_query, query_result
@@ -217,13 +239,13 @@ async def translate_response_workflow(
     # Get database schema
     schema_result = db_tools.get_database_schema()
     schema_text = (
-        json.dumps(schema_result["schema"], indent=2)
+        json.dumps(schema_result["schema"], indent=2, cls=DateTimeEncoder)
         if schema_result["success"]
         else "Schema unavailable"
     )
 
     # Format query result
-    query_result_text = json.dumps(query_result, indent=2)
+    query_result_text = json.dumps(query_result, indent=2, cls=DateTimeEncoder)
 
     # Prepare the translate_sql_response prompt
     translate_prompt_text = Path("translate_sql_response.md").read_text()
@@ -241,7 +263,7 @@ async def translate_response_workflow(
 
     history = [{"role": "system", "content": translate_prompt}]
 
-    response = await client.responses.create(input=history, model="gpt-5-mini")
+    response = await client.responses.create(input=history, model="gpt-4o-mini")
 
     return response.output_text
 

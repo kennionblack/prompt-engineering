@@ -23,7 +23,7 @@ services:
     build: .
     container_name: scraper_app
     env_file:
-      - ../../.env  # Load .env from repository root
+      - ../../.env # Load .env from repository root
     environment:
       - DB_CONNECTION=mysql://scraper_user:scraper_pass@mysql:3306/scraper_db
       - PYTHONUNBUFFERED=1

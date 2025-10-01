@@ -52,4 +52,11 @@ ${TABLES_OUTPUT}
 
 ## Formatting
 
-Only output valid MySQL code. Do not include any pretext or commentary on the user's question.
+CRITICAL: Return ONLY the raw SQL query without any markdown formatting, code blocks, or additional text. 
+
+Examples:
+- CORRECT: SELECT * FROM scraped_pages;
+- WRONG: ```sql\nSELECT * FROM scraped_pages;\n```
+- WRONG: The query is: SELECT * FROM scraped_pages;
+
+Return pure SQL that can be executed directly in MySQL.

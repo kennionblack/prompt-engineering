@@ -1,150 +1,76 @@
-# Containerized Web Scraper
+# ScraperBot
 
-A complete containerized web scraping solution with MySQL database integration.
+An AI-powered web scraper that automatically extracts structured data from any website and creates a queryable database run within a Docker container.
 
-## Quick Start
+## What it does
 
-1. **Start the containers:**
+1. **Analyzes** any website's HTML structure
+2. **Extracts** structured data using AI (books, quotes, articles, etc.)
+3. **Stores** data in MySQL database with appropriate schema
+4. **Answers** natural language questions about the data
 
-   ```bash
-   docker-compose up -d
-   ```
+## Examples
 
-2. **Run the demo:**
+**Books:** "How many books cost over £50?"  
+**Quotes:** "Show me quotes by Albert Einstein"  
+**Articles:** "What articles were published today?"
 
-   ```bash
-   docker-compose exec scraper python3 containerized_example.py
-   ```
+## Core Files
 
-3. **Stop the containers:**
-   ```bash
-   docker-compose down
-   ```
+- `scraperbot_cli.py` - CLI interface to the Docker container running the scraperbot
+- `scraperbot.py` - Core scraping and AI logic
+- `database_tools.py` - Database operations
+- `tools.py` - OpenAI function definitions
 
-## What's Included
+## Requirements
 
-### Services
+- Docker & Docker Compose
+- OpenAI API key
 
-- **MySQL 8.0**: Database for storing scraped content and configurations
-- **Python Scraper**: Application container with all scraping tools
+## Setup & Container Startup
 
-### Components
-
-- `example_scraper_enhanced.py`: Advanced scraper with site analysis
-- `scraperbot.py`: Database tools and utilities
-- `containerized_example.py`: Complete demonstration script
-
-### Database Schema
-
-- `scraped_content`: Stores URLs, titles, content, and metadata
-- `scraper_configs`: Stores reusable scraping configurations
-
-## Usage Examples
-
-### Interactive Database Access
+### 1. Start the MySQL Container
 
 ```bash
-# Connect to MySQL directly
-docker-compose exec mysql mysql -u scraper_user -p scraper_db
+# Start MySQL database container in the background
+docker-compose up -d mysql
 
-# Check database schema from Python
-docker-compose exec scraper python3 -c "
-from scraperbot import DatabaseTools
-db = DatabaseTools('mysql://scraper_user:scraper_pass@mysql:3306/scraper_db')
-print(db.get_database_schema())
-"
+# Check that the container is running
+docker ps
 ```
 
-### Custom Scraping
+### 2. Set OpenAI API Key
 
 ```bash
-# Run your own scraping script
-docker-compose exec scraper python3 your_script.py
+# Option 1: Export environment variable
+export OPENAI_API_KEY="your-key-here"
 
-# Copy files into the container
-docker-compose cp your_script.py scraper:/app/
+# Option 2: Create .env file in project root
+echo "OPENAI_API_KEY=your-key-here" > .env
 ```
 
-### Development Mode
+### 3. Run the ScraperBot (container must be running)
 
 ```bash
-# Mount your local directory for development
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Use the main CLI interface
+python3 scraperbot_cli.py <website-url>
+
+# Examples
+python3 scraperbot_cli.py https://books.toscrape.com
+python3 scraperbot_cli.py https://quotes.toscrape.com
 ```
 
-## Configuration
-
-### Environment Variables
-
-- `DB_CONNECTION`: Database connection string (default: `mysql://scraper_user:scraper_pass@mysql:3306/scraper_db`)
-- `MYSQL_ROOT_PASSWORD`: MySQL root password (default: `root_password`)
-- `MYSQL_DATABASE`: Database name (default: `scraper_db`)
-- `MYSQL_USER`: Database user (default: `scraper_user`)
-- `MYSQL_PASSWORD`: User password (default: `scraper_pass`)
-
-### Volume Mounts
-
-- `mysql_data`: Persistent MySQL data storage
-- `./:/app`: Application code (in development mode)
-
-## Troubleshooting
-
-### Container Issues
+### Container Management
 
 ```bash
-# Check container status
-docker-compose ps
+# Stop the containers
+docker-compose down
 
-# View logs
+# View container logs
 docker-compose logs mysql
-docker-compose logs scraper
 
-# Restart services
+# Restart containers
 docker-compose restart
 ```
 
-### Database Issues
-
-```bash
-# Reset database
-docker-compose down -v
-docker-compose up -d
-
-# Check database connection
-docker-compose exec scraper python3 -c "
-import mysql.connector
-mysql.connector.connect(host='mysql', user='scraper_user', password='scraper_pass', database='scraper_db')
-print('✅ Database connection successful')
-"
-```
-
-### Network Issues
-
-```bash
-# Test container networking
-docker-compose exec scraper ping mysql
-docker-compose exec scraper nslookup mysql
-```
-
-## Files
-
-| File                          | Purpose                              |
-| ----------------------------- | ------------------------------------ |
-| `docker-compose.yml`          | Multi-service container definition   |
-| `Dockerfile`                  | Python application container         |
-| `init.sql`                    | Database initialization script       |
-| `requirements.txt`            | Python dependencies                  |
-| `containerized_example.py`    | Complete demo script                 |
-| `example_scraper_enhanced.py` | Advanced scraping with site analysis |
-| `scraperbot.py`               | Database tools and utilities         |
-
-## Development
-
-To extend this setup:
-
-1. Add your scraping scripts to the directory
-2. Install additional Python packages in `requirements.txt`
-3. Modify database schema in `init.sql`
-4. Adjust container settings in `docker-compose.yml`
-
-The containerized environment provides a clean, reproducible setup for web scraping projects with persistent data storage.
+The system automatically adapts to different website types and extracts meaningful structured data that you can query with natural language.

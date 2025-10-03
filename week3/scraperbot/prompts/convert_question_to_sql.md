@@ -52,11 +52,12 @@ ${TABLES_OUTPUT}
 
 ## Formatting
 
-CRITICAL: Return ONLY the raw SQL query without any markdown formatting, code blocks, or additional text. 
+CRITICAL: Return ONLY the raw SQL query without any markdown formatting, code blocks, or additional text.
 
 Examples:
-- CORRECT: SELECT * FROM scraped_pages;
-- WRONG: ```sql\nSELECT * FROM scraped_pages;\n```
-- WRONG: The query is: SELECT * FROM scraped_pages;
+
+- CORRECT: SELECT \* FROM scraped_pages;
+- WRONG: `sql\nSELECT * FROM scraped_pages;\n`
+- WRONG: The query is: SELECT \* FROM scraped_pages;
 
 Return pure SQL that can be executed directly in MySQL.

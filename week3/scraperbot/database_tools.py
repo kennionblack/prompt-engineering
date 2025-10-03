@@ -277,25 +277,25 @@ class DatabaseTools:
 
             # Create the table
             result = self.execute_query(create_query)
-            if not result.get('success'):
+            if not result.get("success"):
                 return result
 
             # Insert the sample data
             if sample_data:
                 # Build INSERT statement
                 columns_list = list(columns.keys())
-                placeholders = ', '.join(['%s'] * len(columns_list))
+                placeholders = ", ".join(["%s"] * len(columns_list))
                 insert_query = f"""
                 INSERT INTO `{table_name}` ({', '.join([f'`{col}`' for col in columns_list])})
                 VALUES ({placeholders})
                 """
-                
+
                 # Insert each row
                 connection = None
                 try:
                     connection = self.get_connection()
                     cursor = connection.cursor()
-                    
+
                     for row in sample_data:
                         values = []
                         for col in columns_list:
@@ -305,24 +305,28 @@ class DatabaseTools:
                                 value = json.dumps(value)
                             values.append(value)
                         cursor.execute(insert_query, values)
-                    
+
                     connection.commit()
-                    
+
                     return {
-                        "success": True, 
-                        "affected_rows": len(sample_data), 
-                        "message": f"Table '{table_name}' created and {len(sample_data)} rows inserted successfully."
+                        "success": True,
+                        "affected_rows": len(sample_data),
+                        "message": f"Table '{table_name}' created and {len(sample_data)} rows inserted successfully.",
                     }
-                    
+
                 except Exception as e:
                     if connection:
                         connection.rollback()
-                    return {"success": False, "error": str(e), "message": f"Failed to insert data: {e}"}
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "message": f"Failed to insert data: {e}",
+                    }
                 finally:
                     if connection and connection.is_connected():
                         cursor.close()
                         connection.close()
-            
+
             return result
 
         except Exception as e:

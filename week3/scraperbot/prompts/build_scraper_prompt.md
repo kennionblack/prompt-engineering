@@ -23,11 +23,13 @@ The data fetched from the previous URL is as follows:
 **Title:** ${TITLE}
 
 **Content:**
+
 ```
 ${CONTENT}
 ```
 
 **Metadata:**
+
 ```json
 ${METADATA}
 ```
@@ -39,11 +41,13 @@ ${METADATA}
 You MUST analyze the HTML content above and identify repeating patterns that indicate structured data items. Look for:
 
 **Common Container Patterns:**
+
 - `<article>`, `<div class="item">`, `<li>`, `<tr>`, `<section>` with consistent class names
 - Repeated HTML structures that appear multiple times on the page
 - Container elements that wrap individual items (products, articles, posts, etc.)
 
 **Common Data Patterns to Extract:**
+
 - **Titles/Names**: `<h1>`, `<h2>`, `<h3>`, `<a>`, `<span class="title">`, `alt` attributes
 - **Prices/Numbers**: `<span class="price">`, `$XX.XX`, `£XX.XX`, numeric patterns
 - **Descriptions**: `<p>`, `<div class="description">`, text content
@@ -56,9 +60,10 @@ You MUST analyze the HTML content above and identify repeating patterns that ind
 ## EXTRACTION EXAMPLES BY SITE TYPE
 
 **For E-commerce Sites (like books.toscrape.com):**
+
 ```python
 create_table_from_data(
-    table_name="products", 
+    table_name="products",
     sample_data=[
         {"title": "Product Name", "price": "£51.77", "rating": "Three", "availability": "In stock"},
         # ... extract all products found
@@ -67,9 +72,10 @@ create_table_from_data(
 ```
 
 **For Quote/Content Sites (like quotes.toscrape.com):**
+
 ```python
 create_table_from_data(
-    table_name="quotes", 
+    table_name="quotes",
     sample_data=[
         {"text": "Quote text here", "author": "Author Name", "tags": "life,inspiration"},
         # ... extract all quotes found
@@ -78,9 +84,10 @@ create_table_from_data(
 ```
 
 **For News/Blog Sites:**
+
 ```python
 create_table_from_data(
-    table_name="articles", 
+    table_name="articles",
     sample_data=[
         {"headline": "Article Title", "author": "Writer Name", "date": "2024-01-01", "summary": "Article preview..."},
         # ... extract all articles found
@@ -89,9 +96,10 @@ create_table_from_data(
 ```
 
 **For Directory/Listing Sites:**
+
 ```python
 create_table_from_data(
-    table_name="listings", 
+    table_name="listings",
     sample_data=[
         {"name": "Business Name", "address": "123 Main St", "phone": "555-1234", "category": "Restaurant"},
         # ... extract all listings found
@@ -103,7 +111,8 @@ create_table_from_data(
 
 1. **SCAN THE HTML** above for repeating patterns and container elements
 2. **IDENTIFY THE ITEM TYPE** - What kind of content does this site contain?
-   - Products/Books → table name: "products" or "books"  
+
+   - Products/Books → table name: "products" or "books"
    - Quotes → table name: "quotes"
    - Articles/Posts → table name: "articles" or "posts"
    - Listings/Businesses → table name: "listings"
@@ -111,6 +120,7 @@ create_table_from_data(
    - Other → choose appropriate name
 
 3. **EXTRACT COMMON ATTRIBUTES** from each item:
+
    - **Primary identifier**: title, name, headline, text
    - **Secondary data**: price, author, date, category, rating
    - **Metadata**: URLs, images, tags, descriptions
@@ -141,5 +151,6 @@ create_table_from_data(
 - **MEANINGFUL FIELDS**: Choose field names that reflect the actual data
 - **APPROPRIATE TABLE NAME**: Reflect what type of content you found
 - **COMPLETE DATA**: Include as many relevant fields as you can identify
+- **MULTIPLE TABLES**: If the data on a website would be best represented with multiple tables, call `create_table_from_data` multiple times with the necessary fields
 
 Analyze the HTML content now and start extracting!

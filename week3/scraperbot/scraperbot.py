@@ -13,6 +13,7 @@ from database_tools import DatabaseTools
 
 class DateTimeEncoder(json.JSONEncoder):
     """Custom JSON encoder for datetime objects."""
+
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -83,29 +84,28 @@ def get_url_content(url: str) -> str:
 
 async def scraper_workflow(url: str, db_tools: DatabaseTools):
     """First AI workflow: analyze URL content and create database schema with data."""
-    from example_scraper_enhanced import WebScraper
+    from scraper_utils import WebScraper
 
     client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     # Use the enhanced scraper to analyze and extract structured data
     scraper = WebScraper(delay=1.0)
-    print("Analyzing website structure...")
+    print("Analyzing website...")
 
     analysis = scraper.analyze_site(url)
     if "error" in analysis:
         print(f"Failed to analyze website: {analysis['error']}")
         return False
 
-    print("Creating optimal scraping configuration...")
     config = scraper.suggest_config(analysis)
 
-    print("Fetching raw HTML content for AI analysis...")
+    print("Extracting content...")
     # Get raw HTML content instead of processed text for better AI analysis
     raw_soup = scraper.fetch_page(url)
     if not raw_soup:
         print("Failed to fetch raw HTML content")
         return False
-    
+
     # Extract basic info but keep raw HTML for analysis
     scraped_data = scraper.scrape_multiple([url], config)
     if not scraped_data:
@@ -113,12 +113,12 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
         return False
 
     data = scraped_data[0]
-    
+
     # Get raw HTML content for AI to analyze
     raw_html_content = str(raw_soup)
-    
+
     # Use the build_scraper_prompt.md file as the system prompt
-    build_prompt_text = Path("build_scraper_prompt.md").read_text()
+    build_prompt_text = Path("prompts/build_scraper_prompt.md").read_text()
     build_prompt = PromptTextInsertion.replace_keywords(
         build_prompt_text,
         {
@@ -130,7 +130,7 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
         },
     )
 
-    print("AI is analyzing scraped data and creating database schema...")
+    print("Processing website data with AI...")
 
     # Create AI client with database tools
     history = [{"role": "system", "content": build_prompt}]
@@ -146,12 +146,10 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
     # Handle function calls (schema creation and data insertion)
     for item in response.output:
         if item.type == "function_call":
-            print(f">>> Calling {item.name} with args {item.arguments}")
             # Call the method on the db_tools instance instead of the unbound function
             if hasattr(db_tools, item.name):
                 method = getattr(db_tools, item.name)
                 result = method(**json.loads(item.arguments))
-                print(f">>> {item.name} returned {result}")
                 history.append(
                     {
                         "type": "function_call_output",
@@ -160,7 +158,7 @@ async def scraper_workflow(url: str, db_tools: DatabaseTools):
                     }
                 )
 
-    print("Database schema created and populated successfully!")
+    print("✅ Data extracted and stored!")
     return True
 
 
@@ -188,7 +186,7 @@ async def question_to_sql_workflow(question: str, db_tools: DatabaseTools) -> tu
     tables_output_text = json.dumps(tables_output, indent=2, cls=DateTimeEncoder)
 
     # Prepare the convert_question_to_sql prompt
-    sql_prompt_text = Path("convert_question_to_sql.md").read_text()
+    sql_prompt_text = Path("prompts/convert_question_to_sql.md").read_text()
     sql_prompt = PromptTextInsertion.replace_keywords(
         sql_prompt_text,
         {"SCHEMA": schema_text, "QUESTION": question, "TABLES_OUTPUT": tables_output_text},
@@ -197,18 +195,15 @@ async def question_to_sql_workflow(question: str, db_tools: DatabaseTools) -> tu
     # Try to get SQL query with retry logic
     max_retries = 2
     for attempt in range(max_retries + 1):
-        print(f"Converting question to SQL (attempt {attempt + 1})...")
 
         history = [{"role": "system", "content": sql_prompt}]
 
         response = await client.responses.create(input=history, model="gpt-4o-mini")
 
         sql_query = response.output_text.strip()
-        print(f"Generated SQL: {sql_query}")
 
         # Execute the query
         query_result = db_tools.execute_query(sql_query)
-        print(f"Raw SQL Response: {query_result}")
 
         if query_result["success"]:
             return sql_query, query_result
@@ -248,7 +243,7 @@ async def translate_response_workflow(
     query_result_text = json.dumps(query_result, indent=2, cls=DateTimeEncoder)
 
     # Prepare the translate_sql_response prompt
-    translate_prompt_text = Path("translate_sql_response.md").read_text()
+    translate_prompt_text = Path("prompts/translate_sql_response.md").read_text()
     translate_prompt = PromptTextInsertion.replace_keywords(
         translate_prompt_text,
         {
@@ -258,8 +253,6 @@ async def translate_response_workflow(
             "USER_QUESTION": question,
         },
     )
-
-    print("Translating SQL results to natural language...")
 
     history = [{"role": "system", "content": translate_prompt}]
 

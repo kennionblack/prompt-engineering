@@ -1,0 +1,38 @@
+{
+  "name": "cloudflare-cli-chatbot",
+  "version": "1.0.0",
+  "description": "A minimal CLI chatbot with configurable tools based on Cloudflare AI agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "cli-chatbot": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "format": "prettier --write .",
+    "check": "prettier . --check && tsc --noEmit"
+  },
+  "keywords": [
+    "cli",
+    "chatbot",
+    "ai",
+    "tools",
+    "cloudflare"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.6.2",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^2.0.42",
+    "agents": "^0.2.8",
+    "ai": "^5.0.60",
+    "dotenv": "^16.4.5",
+    "zod": "^3.25.76"
+  }
+}

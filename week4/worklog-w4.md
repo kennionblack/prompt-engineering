@@ -11,6 +11,8 @@
 | 9/29/25 | 0.5h | Read [article](https://blog.cloudflare.com/code-mode/) on improving TypeScript MCP config                                  |
 | 9/29/25 | 1h   | Attended lecture                                                                                                           |
 | 9/30/25 | 3h   | Read up on [Cloudflare JS SDK](https://github.com/cloudflare/agents-starter)<br>Fix the scraperbot properly from last week |
+| 10/1/25 | 1h   | Attended lecture                                                                                                           |
+| 10/3/25 | 3h   | Get Cloudflare starter agent up and running<br>Get a simple JS chatbot working                                             |
 
 ## Class notes
 

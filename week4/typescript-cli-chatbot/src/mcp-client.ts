@@ -251,7 +251,7 @@ class MCPCLIAgent {
       }
 
       systemPrompt +=
-        "\n\nUse these tools proactively when they can help answer the user's questions or complete their requests.";
+        "\n\nUse these tools proactively when they can help answer the user's questions or complete their requests. IMPORTANT: When you call a tool, you MUST provide a natural language response that interprets the tool's output in a user-friendly way. Never leave the user with just tool output - always explain what the result means and provide helpful context. For example, if you get time data, say 'The current time is [time]' rather than just showing raw output.";
     }
 
     return systemPrompt;
@@ -367,13 +367,48 @@ class MCPCLIChatbot {
 
       const result = await this.agent.generateResponse();
 
-      this.agent.addMessage({
-        role: 'assistant',
-        content: result.text,
-      });
+      // by default, when a tool is called the agent doesn't generate a response
+      // so as a workaround we feed the tool result into the message log
+      if (
+        result.toolCalls &&
+        result.toolCalls.length > 0 &&
+        (!result.text || result.text.trim() === '')
+      ) {
+        this.agent.addMessage({
+          role: 'assistant',
+          content: result.text || '',
+        });
 
-      // Display response
-      console.log(`\n🤖 ${result.text || 'No response generated'}\n`);
+        const toolResults = result.toolCalls
+          .map((call) => {
+            const toolResult = result.toolResults?.find(
+              (r) => r.toolCallId === call.toolCallId
+            );
+            return `${call.toolName} returned: ${toolResult?.output || 'No result'}`;
+          })
+          .join('\n');
+
+        this.agent.addMessage({
+          role: 'user',
+          content: `Based on the tool results:\n${toolResults}\n\nPlease provide a natural language response to my original question.`,
+        });
+
+        const interpretResult = await this.agent.generateResponse();
+
+        this.agent.addMessage({
+          role: 'assistant',
+          content: interpretResult.text,
+        });
+
+        console.log(`\n${interpretResult.text || 'No response generated'}\n`);
+      } else {
+        this.agent.addMessage({
+          role: 'assistant',
+          content: result.text || '',
+        });
+
+        console.log(`\n${result.text || 'No response generated'}\n`);
+      }
 
       if (result.toolCalls && result.toolCalls.length > 0) {
         console.log('Tools executed via MCP:');

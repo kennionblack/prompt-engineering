@@ -1,0 +1,28 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: chatbot_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: chatbot_root_pass
+      MYSQL_DATABASE: chatbot_db
+      MYSQL_USER: chatbot_user
+      MYSQL_PASSWORD: chatbot_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./initialize.sql:/docker-entrypoint-initdb.d/01-initialize.sql
+      - ./populate.sql:/docker-entrypoint-initdb.d/02-populate.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - chatbot_network
+
+networks:
+  chatbot_network:
+    driver: bridge
+
+volumes:
+  mysql_data:

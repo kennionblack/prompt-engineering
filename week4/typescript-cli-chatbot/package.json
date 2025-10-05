@@ -11,6 +11,10 @@
     "build": "tsc",
     "start": "npm run build && node dist/index.js",
     "dev": "tsc && node dist/index.js",
+    "mcp-server": "npm run build && node dist/mcp-server.js",
+    "mcp-client": "npm run build && node dist/mcp-client.js",
+    "dev-mcp-server": "tsc && node dist/mcp-server.js",
+    "dev-mcp-client": "tsc && node dist/mcp-client.js",
     "format": "prettier --write .",
     "check": "prettier . --check && tsc --noEmit"
   },
@@ -30,6 +34,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.42",
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "agents": "^0.2.8",
     "ai": "^5.0.60",
     "dotenv": "^16.4.5",

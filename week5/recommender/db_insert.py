@@ -69,9 +69,6 @@ segment_rows_df = pd.DataFrame(segment_rows)
 podcast_columns = ["id", "title"]
 segment_columns = ["id", "start_time", "end_time", "content", "embedding", "podcast_id"]
 
-# HINT: In addition to the embedding and document files you likely need to load the raw data via the hugging face datasets library
-# ds = load_dataset("Whispering-GPT/lex-fridman-podcast")
-
 # Chunk rows into smaller size to avoid memory errors
 chunk_size = 20000
 for i in range(0, len(podcast_rows_df), chunk_size):

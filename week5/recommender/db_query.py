@@ -1,4 +1,3 @@
-## This script is used to query the database
 import os
 import psycopg2
 from dotenv import load_dotenv
@@ -7,16 +6,8 @@ load_dotenv()
 
 
 def display_results(results, columns, title):
-    """
-    Display query results nicely, courtesy of AI
-
-    Args:
-      results: List of tuples from cursor.fetchall()
-      columns: List of column names in order
-      title: Title to display above the results
-    """
     if not results:
-        print(f"{title}: No results found")
+        print(f"{title}: No results found, womp womp")
         return
 
     print(f"{title}")
@@ -67,7 +58,7 @@ def find_similar_segments(cursor, segment_id, similar=True):
     return cursor.fetchall()
 
 
-def find_similar_episode_by_segment(cursor, segment_id):
+def find_similar_episode_by_segment_id(cursor, segment_id):
     query = """
     WITH target AS (
       SELECT embedding
@@ -100,7 +91,7 @@ def find_similar_episode_by_segment(cursor, segment_id):
     return cursor.fetchall()
 
 
-def find_similar_episode_by_episode(cursor, episode_id):
+def find_similar_episode_by_episode_id(cursor, episode_id):
     query = """
     WITH target AS (
       SELECT embedding
@@ -156,14 +147,17 @@ q4_results = find_similar_segments(cursor, "51:56")
 display_results(q4_results, columns, "Query 4")
 
 columns = ["podcast_title", "embedding_distance"]
-q5a_results = find_similar_episode_by_segment(cursor, "267:476")
+q5a_results = find_similar_episode_by_segment_id(cursor, "267:476")
 display_results(q5a_results, columns, "Query 5A")
 
-q5b_results = find_similar_episode_by_segment(cursor, "48:511")
+q5b_results = find_similar_episode_by_segment_id(cursor, "48:511")
 display_results(q5b_results, columns, "Query 5B")
 
-q5c_results = find_similar_episode_by_segment(cursor, "51:56")
+q5c_results = find_similar_episode_by_segment_id(cursor, "51:56")
 display_results(q5c_results, columns, "Query 5C")
 
-q6_results = find_similar_episode_by_episode(cursor, "VeH7qKZr0WI")
+q6_results = find_similar_episode_by_episode_id(cursor, "VeH7qKZr0WI")
 display_results(q6_results, columns, "Query 6")
+
+conn.commit()
+conn.close()

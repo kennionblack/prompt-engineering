@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.prettierrc
+.env
+.DS_Store
+*.tsbuildinfo
+mcp-servers/*/node_modules/
+mcp-servers/*/.venv/
+mcp-servers/*/__pycache__/
+*.pyc

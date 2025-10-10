@@ -49,7 +49,7 @@ def find_similar_segments(cursor, segment_id, similar=True):
     ) AS target
     WHERE ps.id != %s
     ORDER BY ps.embedding <-> target.embedding {}
-    LIMIT 5;
+    LIMIT 5
     """.format(
         order
     )

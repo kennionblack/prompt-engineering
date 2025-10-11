@@ -19,7 +19,7 @@ def csv_to_chroma(file_path: Path, metadata_fields: List[str], is_free=True):
 
         metadatas.append(parse_metadata(row, metadata_fields))
 
-        # all of the csvs use text as the column name for the actual text
+        # all of the csvs use "text" as the column name for the actual text
         documents.append(row["text"])
 
     return ids, embeddings, metadatas, documents

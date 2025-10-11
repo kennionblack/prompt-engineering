@@ -30,7 +30,7 @@ def batch_add_to_collection(
 
 
 def populate_chroma():
-    free_cluster_collection = client.get_or_create_collection(name="free_cluster")
+    free_cluster_collection = client.get_or_create_collection(name="free_clusters")
 
     (
         free_cluster_ids,
@@ -39,7 +39,7 @@ def populate_chroma():
         free_cluster_documents,
     ) = csv_to_chroma(
         Path("./free/free_3_clusters.csv"),
-        metadata_fields=["source", "url"],
+        metadata_fields=["title", "speaker", "year", "url"],
     )
 
     batch_add_to_collection(
@@ -50,7 +50,7 @@ def populate_chroma():
         free_cluster_documents,
     )
 
-    free_paragraph_collection = client.get_or_create_collection(name="free_paragraph")
+    free_paragraph_collection = client.get_or_create_collection(name="free_paragraphs")
 
     (
         free_paragraph_ids,
@@ -59,7 +59,7 @@ def populate_chroma():
         free_paragraph_documents,
     ) = csv_to_chroma(
         Path("./free/free_paragraphs.csv"),
-        metadata_fields=["source", "url"],
+        metadata_fields=["title", "speaker", "year", "url"],
     )
 
     batch_add_to_collection(
@@ -79,7 +79,7 @@ def populate_chroma():
         free_talks_documents,
     ) = csv_to_chroma(
         Path("./free/free_talks.csv"),
-        metadata_fields=["source", "url"],
+        metadata_fields=["title", "speaker", "year", "url"],
     )
 
     batch_add_to_collection(
@@ -90,7 +90,7 @@ def populate_chroma():
         free_talks_documents,
     )
 
-    openai_cluster_collection = client.get_or_create_collection(name="openai_cluster")
+    openai_cluster_collection = client.get_or_create_collection(name="openai_clusters")
     (
         openai_cluster_ids,
         openai_cluster_embeddings,
@@ -98,7 +98,7 @@ def populate_chroma():
         openai_cluster_documents,
     ) = csv_to_chroma(
         Path("./openai/openai_3_clusters.csv"),
-        metadata_fields=["source", "url"],
+        metadata_fields=["title", "speaker", "year", "url"],
         is_free=False,
     )
 
@@ -110,7 +110,9 @@ def populate_chroma():
         openai_cluster_documents,
     )
 
-    openai_paragraph_collection = client.get_or_create_collection(name="openai_paragraph")
+    openai_paragraph_collection = client.get_or_create_collection(
+        name="openai_paragraphs"
+    )
 
     (
         openai_paragraph_ids,
@@ -119,7 +121,7 @@ def populate_chroma():
         openai_paragraph_documents,
     ) = csv_to_chroma(
         Path("./openai/openai_paragraphs.csv"),
-        metadata_fields=["source", "url"],
+        metadata_fields=["title", "speaker", "year", "url"],
         is_free=False,
     )
 
@@ -140,7 +142,7 @@ def populate_chroma():
         openai_talks_documents,
     ) = csv_to_chroma(
         Path("./openai/openai_talks.csv"),
-        metadata_fields=["source", "url"],
+        metadata_fields=["title", "speaker", "year", "url"],
         is_free=False,
     )
 

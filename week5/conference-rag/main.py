@@ -7,7 +7,6 @@ import chromadb
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-import asyncio
 
 
 def get_top_k_results(
@@ -90,13 +89,11 @@ class RAGClient:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5,
-            max_tokens=500,
         )
 
         return response.choices[0].message.content
 
     def extract_urls(self, retrieved_docs: list[dict]) -> list[str]:
-        """Extract URLs from retrieved documents"""
         urls = []
         for doc in retrieved_docs:
             metadata = doc["metadata"] or {}
@@ -106,24 +103,17 @@ class RAGClient:
         return urls
 
     def query(self, question: str, retrieved_docs: list[dict]) -> dict:
-        """Main RAG query method"""
         response = self.generate_response(question, retrieved_docs)
         urls = self.extract_urls(retrieved_docs)
 
-        # Add URLs deterministically to the response
+        # Add URLs at the end of the response
         if urls:
             url_section = "\n\nSource URLs:\n" + "\n".join(f"- {url}" for url in urls)
             full_response = response + url_section
         else:
             full_response = response
 
-        return {
-            "question": question,
-            "response": full_response,
-            "source_docs": retrieved_docs,
-            "num_docs_used": len(retrieved_docs),
-            "source_urls": urls,
-        }
+        return full_response
 
 
 if __name__ == "__main__":
@@ -157,29 +147,37 @@ if __name__ == "__main__":
         "openai_clusters": chromadb_client.get_collection(name="openai_clusters"),
     }
 
+    collection_configs = [
+        ("free_talks", free_question_embeddings, "Free Embeddings - Talks"),
+        ("free_paragraphs", free_question_embeddings, "Free Embeddings - Paragraphs"),
+        ("free_clusters", free_question_embeddings, "Free Embeddings - Clusters"),
+        ("openai_talks", openai_question_embeddings, "OpenAI Embeddings - Talks"),
+        (
+            "openai_paragraphs",
+            openai_question_embeddings,
+            "OpenAI Embeddings - Paragraphs",
+        ),
+        ("openai_clusters", openai_question_embeddings, "OpenAI Embeddings - Clusters"),
+    ]
+
+    # Process each question with all collections
     for question in questions:
-        print(f"\n{'='*80}")
+        print(f"\n{'='*100}")
         print(f"QUESTION: {question}")
-        print(f"{'='*80}")
+        print(f"{'='*100}")
 
-        # Test with free embeddings on talks collection
-        free_results = get_top_k_results(
-            question, free_question_embeddings, collections["free_talks"], k=3
-        )
+        for collection_name, embeddings, display_name in collection_configs:
+            print(f"\n{'-'*60}")
+            print(f"COLLECTION: {display_name}")
+            print(f"{'-'*60}")
 
-        if free_results:
-            print(f"\n--- FREE EMBEDDINGS (TALKS) ---")
-            rag_response = rag_client.query(question, free_results)
-            print(f"Response: {rag_response['response']}")
-            print(f"Used {rag_response['num_docs_used']} source documents")
+            results = get_top_k_results(
+                question, embeddings, collections[collection_name], k=3
+            )
 
-        # Test with OpenAI embeddings on talks collection
-        openai_results = get_top_k_results(
-            question, openai_question_embeddings, collections["openai_talks"], k=3
-        )
+            rag_response = rag_client.query(question, results)
+            print(f"\n{rag_response}")
 
-        if openai_results:
-            print(f"\n--- OPENAI EMBEDDINGS (TALKS) ---")
-            rag_response = rag_client.query(question, openai_results)
-            print(f"Response: {rag_response['response']}")
-            print(f"Used {rag_response['num_docs_used']} source documents")
+        print(f"\n{'='*100}")
+        print("END OF QUESTION RESULTS")
+        print(f"{'='*100}\n")

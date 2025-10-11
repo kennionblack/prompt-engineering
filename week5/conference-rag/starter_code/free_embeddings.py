@@ -6,7 +6,7 @@ import os
 import shutil
 
 
-def generate_embeddings(csv_file, column_name, output_dir="output_embeddings"):
+def generate_embeddings(csv_file, column_name, output_dir="../output_embeddings"):
     """Generates and adds sentence embeddings to a CSV file with optimized performance."""
     try:
         # Create output directory if it doesn't exist

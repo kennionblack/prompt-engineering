@@ -1,3 +1,5 @@
-config.json
+vector_generation/config.json
 free
 openai
+chroma_db
+__pycache__

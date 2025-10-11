@@ -8,7 +8,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 import os
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def cluster_paragraph_embeddings(csv_file, k, prefix):
@@ -30,7 +32,15 @@ def cluster_paragraph_embeddings(csv_file, k, prefix):
         logging.info(f"Loaded CSV with {len(df)} paragraphs")
 
         # Validate required columns
-        required_columns = ["url", "embedding", "title", "speaker", "calling", "year", "season"]
+        required_columns = [
+            "url",
+            "embedding",
+            "title",
+            "speaker",
+            "calling",
+            "year",
+            "season",
+        ]
         if not all(col in df.columns for col in required_columns):
             missing = [col for col in required_columns if col not in df.columns]
             raise ValueError(f"Missing required columns: {missing}")
@@ -114,6 +124,6 @@ def cluster_paragraph_embeddings(csv_file, k, prefix):
 # Execute the clustering
 if __name__ == "__main__":
     print("Start paragraphs:", datetime.now().strftime("%H:%M:%S"))
-    cluster_paragraph_embeddings("free_paragraphs.csv", 3, "free")
-    cluster_paragraph_embeddings("openai_paragraphs.csv", 3, "openai")
+    cluster_paragraph_embeddings("../free_paragraphs.csv", 3, "free")
+    cluster_paragraph_embeddings("../openai_paragraphs.csv", 3, "openai")
     print("Finish:", datetime.now().strftime("%H:%M:%S"))

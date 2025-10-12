@@ -134,6 +134,45 @@ columns = [
     "embedding_distance",
 ]
 
+"""
+The questions below are the source of where these queries came from.
+
+Q1) What are the five most similar segments to segment "267:476"
+
+Input: "that if we were to meet alien life at some point"
+For each result return the podcast name, the segment id, segment raw text,  the start time, stop time, and embedding distance
+
+Q2) What are the five most dissimilar segments to segment "267:476"
+
+Input: "that if we were to meet alien life at some point"
+For each result return the podcast name, the segment id, segment raw text,  the start time, stop time, and embedding distance
+
+Q3) What are the five most similar segments to segment '48:511'
+
+Input: "Is it is there something especially interesting and profound to you in terms of our current deep learning neural network, artificial neural network approaches and the whatever we do understand about the biological neural network."
+For each result return the podcast name, the segment id, segment raw text,  the start time, stop time, and embedding distance
+
+Q4) What are the five most similar segments to segment '51:56'
+
+Input: "But what about like the fundamental physics of dark energy? Is there any understanding of what the heck it is?"
+For each result return the podcast name, the segment id, segment raw text,  the start time, stop time, and embedding distance
+
+Q5) For each of the following podcast segments, find the five most similar podcast episodes. Hint: You can do this by averaging over the embedding vectors within a podcast episode.
+
+    a) Segment "267:476"
+
+    b) Segment '48:511'
+
+    c) Segment '51:56'
+
+For each result return the Podcast title and the embedding distance
+
+Q6) For podcast episode id = VeH7qKZr0WI, find the five most similar podcast episodes. Hint: you can do a similar averaging procedure as Q5
+
+Input Episode: "Balaji Srinivasan: How to Fix Government, Twitter, Science, and the FDA | Lex Fridman Podcast #331"
+For each result return the Podcast title and the embedding distance
+"""
+
 q1_results = find_similar_segments(cursor, "267:476")
 display_results(q1_results, columns, "Query 1")
 

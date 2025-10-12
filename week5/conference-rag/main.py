@@ -13,6 +13,7 @@ def get_top_k_results(
     question: str,
     embedding_dict: dict[str, list[float]],
     collection: chromadb.Collection,
+    collection_name: str,
     k=3,
 ):
     question_embedding = embedding_dict[question]
@@ -23,14 +24,53 @@ def get_top_k_results(
     )
 
     retrieved_docs = []
+
+    # Print the three most similar embeddings
+    print(f"\nThree Most Similar Embeddings for '{question}' in {collection_name}:")
+    print("-" * 80)
+
     if results["ids"] and len(results["ids"][0]) > 0:
         for i in range(len(results["ids"][0])):
+            distance = results["distances"][0][i]
+            similarity = 1 - distance
+            document = results["documents"][0][i] if results["documents"] else ""
+            metadata = results["metadatas"][0][i] if results["metadatas"] else {}
+
+            # Format and print each similar embedding
+            print(f"\nResult {i+1}:")
+            print(f"  Similarity Score: {similarity:.4f}")
+            print(f"  Distance: {distance:.4f}")
+
+            if metadata:
+                title = metadata.get("title", "Unknown Title")
+                speaker = metadata.get("speaker", "Unknown Speaker")
+                year = metadata.get("year", "Unknown Year")
+                url = metadata.get("url", metadata.get("source_url", ""))
+
+                print(f"  Title: {title}")
+                print(f"  Speaker: {speaker}")
+                print(f"  Year: {year}")
+                if url:
+                    print(f"  URL: {url}")
+
+            if isinstance(document, list):
+                document_text = str(document)
+            else:
+                document_text = document
+
+            if len(document_text) > 200:
+                print(f"  Content: {document_text[:200]}...")
+            else:
+                print(f"  Content: {document_text}")
+
             doc_info = {
-                "distance": results["distances"][0][i],
-                "document": results["documents"][0][i] if results["documents"] else "",
-                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                "distance": distance,
+                "document": document,
+                "metadata": metadata,
             }
             retrieved_docs.append(doc_info)
+    else:
+        print("No similar embeddings found.")
 
     return retrieved_docs
 
@@ -51,7 +91,6 @@ class RAGClient:
             title = metadata.get("title", "Unknown Title")
             speaker = metadata.get("speaker", "Unknown Speaker")
             year = metadata.get("year", "Unknown Year")
-            url = metadata.get("url", metadata.get("source_url", ""))
 
             context_parts.append(
                 f"Document {i} (Similarity Score: {1 - doc['distance']:.4f}):\n"
@@ -68,7 +107,7 @@ class RAGClient:
 
         prompt = f"""
         Based on the following retrieved documents from LDS General Conference talks, please answer the provided question. 
-        Use the information from the documents to provide a comprehensive and accurate response.
+        Use only the information from the documents to provide a comprehensive and accurate response. Do not consult outside sources or knowledge.
         
         When referencing information from the documents, please mention the speaker's name and/or talk title when relevant.
 
@@ -172,7 +211,7 @@ if __name__ == "__main__":
             print(f"{'-'*60}")
 
             results = get_top_k_results(
-                question, embeddings, collections[collection_name], k=3
+                question, embeddings, collections[collection_name], display_name, k=3
             )
 
             rag_response = rag_client.query(question, results)

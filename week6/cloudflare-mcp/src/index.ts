@@ -1,17 +1,17 @@
-import { Hono } from 'hono';
-import { streamText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { experimental_codemode } from './code-mode';
-import { MCPClient } from './mcp-client';
-import { Env } from './types';
-import { loadEnvironment } from './env-config';
+import { Hono } from "hono";
+import { streamText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { experimental_codemode } from "./code-mode";
+import { MCPClient } from "./mcp-client";
+import { Env } from "./types";
+import { loadEnvironment } from "./env-config";
 
 const app = new Hono<{ Bindings: Env }>();
 
 /**
  * Root endpoint - serve HTML demo page
  */
-app.get('/', (c) => {
+app.get("/", (c) => {
   return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -242,92 +242,94 @@ app.get('/', (c) => {
 /**
  * Health check endpoint
  */
-app.get('/health', (c) => {
-  return c.json({ status: 'healthy', timestamp: new Date().toISOString() });
+app.get("/health", (c) => {
+  return c.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 
 /**
  * Simple test endpoint that doesn't require external MCP server
  */
-app.get('/test', (c) => {
+app.get("/test", (c) => {
   const config = loadEnvironment(c.env);
   return c.json({
-    status: 'ok',
+    status: "ok",
     hasOpenAI: !!config.openaiApiKey,
     mcpServer: config.mcpServerUrl,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
 /**
  * Simple chat endpoint without MCP (for testing)
  */
-app.post('/chat/simple', async (c) => {
+app.post("/chat/simple", async (c) => {
   try {
     const { messages } = await c.req.json();
 
     if (!messages || !Array.isArray(messages)) {
-      return c.json({ error: 'Messages array is required' }, 400);
+      return c.json({ error: "Messages array is required" }, 400);
     }
 
     const config = loadEnvironment(c.env);
-    
+
     if (!config.openaiApiKey) {
-      return c.json({ error: 'OpenAI API key is required' }, 400);
+      return c.json({ error: "OpenAI API key is required" }, 400);
     }
 
     // Create OpenAI client with API key
     const openaiProvider = createOpenAI({
-      apiKey: config.openaiApiKey
+      apiKey: config.openaiApiKey,
     });
-    const model = openaiProvider('gpt-4o-mini');
+    const model = openaiProvider("gpt-4o-mini");
 
     // Stream the response
     const result = await streamText({
       model,
-      system: 'You are a helpful AI assistant.',
+      system: "You are a helpful AI assistant.",
       messages,
-      maxTokens: 1000
+      maxTokens: 1000,
     });
 
     // Return streaming response
     return result.toDataStreamResponse({
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
     });
-
   } catch (error) {
-    console.error('Simple chat error:', error);
-    return c.json({ 
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : String(error)
-    }, 500);
+    console.error("Simple chat error:", error);
+    return c.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500
+    );
   }
 });
 
 /**
  * Main chat endpoint using code mode
  */
-app.post('/chat', async (c) => {
+app.post("/chat", async (c) => {
   try {
     const { messages, mcpServerUrl } = await c.req.json();
 
     if (!messages || !Array.isArray(messages)) {
-      return c.json({ error: 'Messages array is required' }, 400);
+      return c.json({ error: "Messages array is required" }, 400);
     }
 
     const config = loadEnvironment(c.env);
     const serverUrl = mcpServerUrl || config.mcpServerUrl;
-    
+
     if (!serverUrl) {
-      return c.json({ error: 'MCP server URL is required' }, 400);
+      return c.json({ error: "MCP server URL is required" }, 400);
     }
 
     if (!config.openaiApiKey) {
-      return c.json({ error: 'OpenAI API key is required' }, 400);
+      return c.json({ error: "OpenAI API key is required" }, 400);
     }
 
     // Set up code mode with MCP integration
@@ -335,14 +337,14 @@ app.post('/chat', async (c) => {
       prompt: `You are a helpful AI assistant with access to MCP tools through code mode. 
       When performing complex tasks, write TypeScript code using the codemode tool to chain operations together.`,
       serverUrl,
-      env: c.env
+      env: c.env,
     });
 
     // Create OpenAI client with API key
     const openaiProvider = createOpenAI({
-      apiKey: config.openaiApiKey
+      apiKey: config.openaiApiKey,
     });
-    const model = openaiProvider('gpt-4');
+    const model = openaiProvider("gpt-4");
 
     // Stream the response
     const result = await streamText({
@@ -350,64 +352,68 @@ app.post('/chat', async (c) => {
       system: prompt,
       messages,
       tools,
-      maxTokens: 2000
+      maxTokens: 2000,
     });
 
     // Return streaming response
     return result.toDataStreamResponse({
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
     });
-
   } catch (error) {
-    console.error('Chat error:', error);
-    return c.json({ 
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : String(error)
-    }, 500);
+    console.error("Chat error:", error);
+    return c.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500
+    );
   }
 });
 
 /**
  * Direct MCP tool calling endpoint (for testing)
  */
-app.post('/mcp/call', async (c) => {
+app.post("/mcp/call", async (c) => {
   try {
     const { serverUrl, toolName, arguments: args } = await c.req.json();
 
     if (!serverUrl || !toolName) {
-      return c.json({ error: 'serverUrl and toolName are required' }, 400);
+      return c.json({ error: "serverUrl and toolName are required" }, 400);
     }
 
     const mcpClient = new MCPClient(serverUrl);
     await mcpClient.initialize();
 
     const result = await mcpClient.callTool(toolName, args || {});
-    
-    return c.json({ result });
 
+    return c.json({ result });
   } catch (error) {
-    console.error('MCP call error:', error);
-    return c.json({ 
-      error: 'MCP call failed',
-      details: error instanceof Error ? error.message : String(error)
-    }, 500);
+    console.error("MCP call error:", error);
+    return c.json(
+      {
+        error: "MCP call failed",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500
+    );
   }
 });
 
 /**
  * List available MCP tools
  */
-app.get('/mcp/tools', async (c) => {
+app.get("/mcp/tools", async (c) => {
   try {
     const config = loadEnvironment(c.env);
-    const serverUrl = c.req.query('serverUrl') || config.mcpServerUrl;
-    
+    const serverUrl = c.req.query("serverUrl") || config.mcpServerUrl;
+
     if (!serverUrl) {
-      return c.json({ error: 'MCP server URL is required' }, 400);
+      return c.json({ error: "MCP server URL is required" }, 400);
     }
 
     const mcpClient = new MCPClient(serverUrl);
@@ -415,63 +421,67 @@ app.get('/mcp/tools', async (c) => {
 
     const tools = await mcpClient.listTools();
     const typeDefinitions = await mcpClient.generateTypeDefinitions();
-    
-    return c.json({ tools, typeDefinitions });
 
+    return c.json({ tools, typeDefinitions });
   } catch (error) {
-    console.error('MCP tools error:', error);
-    return c.json({ 
-      error: 'Failed to fetch MCP tools',
-      details: error instanceof Error ? error.message : String(error)
-    }, 500);
+    console.error("MCP tools error:", error);
+    return c.json(
+      {
+        error: "Failed to fetch MCP tools",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500
+    );
   }
 });
 
 /**
  * Execute code in sandbox (for testing code mode)
  */
-app.post('/codemode/execute', async (c) => {
+app.post("/codemode/execute", async (c) => {
   try {
     const { code, serverUrl } = await c.req.json();
 
     if (!code) {
-      return c.json({ error: 'Code is required' }, 400);
+      return c.json({ error: "Code is required" }, 400);
     }
 
     const config = loadEnvironment(c.env);
     const mcpServerUrl = serverUrl || config.mcpServerUrl;
     if (!mcpServerUrl) {
-      return c.json({ error: 'MCP server URL is required' }, 400);
+      return c.json({ error: "MCP server URL is required" }, 400);
     }
 
     const { codeMode } = await experimental_codemode({
-      prompt: 'System prompt',
+      prompt: "System prompt",
       serverUrl: mcpServerUrl,
-      env: c.env
+      env: c.env,
     });
 
     const result = await codeMode.executeInWorker(code);
-    
-    return c.json({ result });
 
+    return c.json({ result });
   } catch (error) {
-    console.error('Code execution error:', error);
-    return c.json({ 
-      error: 'Code execution failed',
-      details: error instanceof Error ? error.message : String(error)
-    }, 500);
+    console.error("Code execution error:", error);
+    return c.json(
+      {
+        error: "Code execution failed",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500
+    );
   }
 });
 
 /**
  * CORS preflight
  */
-app.options('*', (c) => {
-  return c.text('OK', 200, {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400'
+app.options("*", (c) => {
+  return c.text("OK", 200, {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
   });
 });
 

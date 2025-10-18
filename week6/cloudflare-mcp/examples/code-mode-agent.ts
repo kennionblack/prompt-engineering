@@ -3,9 +3,9 @@
  * This example shows how to use code mode with an AI agent to perform complex tasks
  */
 
-import { experimental_codemode } from '../src/code-mode';
-import { streamText } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { experimental_codemode } from "../src/code-mode";
+import { streamText } from "ai";
+import { openai } from "@ai-sdk/openai";
 
 // Mock environment for example (in real use, this comes from Cloudflare Workers)
 const mockEnv = {
@@ -15,51 +15,54 @@ const mockEnv = {
       console.log(`Would create worker with ID: ${id}`);
       if (factory) {
         const definition = await factory();
-        console.log('Worker definition:', {
+        console.log("Worker definition:", {
           compatibilityDate: definition.compatibilityDate,
           mainModule: definition.mainModule,
-          moduleCount: Object.keys(definition.modules || {}).length
+          moduleCount: Object.keys(definition.modules || {}).length,
         });
       }
-      
+
       // Return mock worker
       return {
         getEntrypoint: () => ({
           fetch: async (request: Request) => {
             // Mock execution result
-            return new Response(JSON.stringify({
-              success: true,
-              result: 'Mock execution result'
-            }), {
-              headers: { 'Content-Type': 'application/json' }
-            });
-          }
-        })
+            return new Response(
+              JSON.stringify({
+                success: true,
+                result: "Mock execution result",
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+          },
+        }),
       };
-    }
+    },
   } as any,
-  OPENAI_API_KEY: 'mock-key-for-demo',
-  MCP_SERVER_URL: 'https://gitmcp.io/cloudflare/agents'
+  OPENAI_API_KEY: "mock-key-for-demo",
+  MCP_SERVER_URL: "https://gitmcp.io/cloudflare/agents",
 };
 
 async function codeModeExample() {
   try {
-    console.log('Setting up Code Mode...');
-    
+    console.log("Setting up Code Mode...");
+
     // Initialize code mode with MCP server
     const { prompt, tools, codeMode } = await experimental_codemode({
       prompt: `You are a helpful AI assistant with access to development tools.
       When performing complex tasks, write TypeScript code using the codemode tool to chain operations together.
       Always explain what your code does.`,
-      serverUrl: 'https://gitmcp.io/cloudflare/agents',
-      env: mockEnv
+      serverUrl: "https://gitmcp.io/cloudflare/agents",
+      env: mockEnv,
     });
-    
-    console.log('Enhanced prompt:', prompt.substring(0, 200) + '...');
-    console.log('Available tools:', Object.keys(tools));
-    
+
+    console.log("Enhanced prompt:", prompt.substring(0, 200) + "...");
+    console.log("Available tools:", Object.keys(tools));
+
     // Example: Direct code execution (mock)
-    console.log('\nTesting direct code execution...');
+    console.log("\nTesting direct code execution...");
     const sampleCode = `
       // Find documentation and search for specific topics
       const docs = await codemode.fetchAgentsDocumentation({});
@@ -73,30 +76,31 @@ async function codeModeExample() {
         timestamp: new Date().toISOString()
       };
     `;
-    
+
     try {
       const result = await codeMode.executeInWorker(sampleCode);
-      console.log('Code execution result:', result);
+      console.log("Code execution result:", result);
     } catch (error) {
-      console.log('Code execution (mock):', error instanceof Error ? error.message : error);
+      console.log("Code execution (mock):", error instanceof Error ? error.message : error);
     }
-    
+
     // Example: Using with AI SDK (mock - requires real API key)
-    console.log('\nExample AI SDK integration:');
-    
+    console.log("\nExample AI SDK integration:");
+
     const exampleMessages = [
       {
-        role: 'user' as const,
-        content: 'Search the Cloudflare agents documentation for information about the Worker Loader API and summarize the key points'
-      }
+        role: "user" as const,
+        content:
+          "Search the Cloudflare agents documentation for information about the Worker Loader API and summarize the key points",
+      },
     ];
-    
-    console.log('Would create AI stream with:');
-    console.log('- Model: gpt-4');
-    console.log('- System prompt length:', prompt.length);
-    console.log('- Tools available:', Object.keys(tools));
-    console.log('- User message:', exampleMessages[0].content);
-    
+
+    console.log("Would create AI stream with:");
+    console.log("- Model: gpt-4");
+    console.log("- System prompt length:", prompt.length);
+    console.log("- Tools available:", Object.keys(tools));
+    console.log("- User message:", exampleMessages[0].content);
+
     // In a real implementation with API key:
     /*
     const stream = streamText({
@@ -111,14 +115,13 @@ async function codeModeExample() {
       process.stdout.write(chunk);
     }
     */
-    
+
     // Show generated TypeScript definitions
-    console.log('\nGenerated TypeScript definitions:');
+    console.log("\nGenerated TypeScript definitions:");
     const typeDefs = await codeMode.getTypeDefinitions();
-    console.log(typeDefs.substring(0, 800) + '...');
-    
+    console.log(typeDefs.substring(0, 800) + "...");
   } catch (error) {
-    console.error('Error in code mode example:', error instanceof Error ? error.message : error);
+    console.error("Error in code mode example:", error instanceof Error ? error.message : error);
   }
 }
 

@@ -7,8 +7,8 @@ import {
   MCPToolResult,
   MCPInitializeParams,
   MCPInitializeResult,
-  GeneratedToolAPI
-} from './types';
+  GeneratedToolAPI,
+} from "./types";
 
 /**
  * MCP Client implementation for Cloudflare Workers
@@ -36,18 +36,18 @@ export class MCPClient {
    */
   protected async sendRequest(method: string, params?: any): Promise<any> {
     const request: MCPRequest = {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id: this.getNextRequestId(),
       method,
-      params
+      params,
     };
 
     const response = await fetch(this.serverUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
     });
 
     if (!response.ok) {
@@ -68,21 +68,21 @@ export class MCPClient {
    */
   async initialize(): Promise<MCPInitializeResult> {
     const params: MCPInitializeParams = {
-      protocolVersion: '2024-11-05',
+      protocolVersion: "2024-11-05",
       capabilities: {
-        sampling: {}
+        sampling: {},
       },
       clientInfo: {
-        name: 'cloudflare-mcp-client',
-        version: '1.0.0'
-      }
+        name: "cloudflare-mcp-client",
+        version: "1.0.0",
+      },
     };
 
-    const result = await this.sendRequest('initialize', params);
-    
+    const result = await this.sendRequest("initialize", params);
+
     // Send initialized notification
-    await this.sendNotification('notifications/initialized');
-    
+    await this.sendNotification("notifications/initialized");
+
     this.isInitialized = true;
     return result;
   }
@@ -92,17 +92,17 @@ export class MCPClient {
    */
   protected async sendNotification(method: string, params?: any): Promise<void> {
     const notification = {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       method,
-      params
+      params,
     };
 
     await fetch(this.serverUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(notification)
+      body: JSON.stringify(notification),
     });
   }
 
@@ -114,11 +114,11 @@ export class MCPClient {
       await this.initialize();
     }
 
-    const result = await this.sendRequest('tools/list');
+    const result = await this.sendRequest("tools/list");
     const tools: MCPTool[] = result.tools || [];
-    
+
     // Cache tools for later use
-    tools.forEach(tool => {
+    tools.forEach((tool) => {
       this.tools.set(tool.name, tool);
     });
 
@@ -133,9 +133,9 @@ export class MCPClient {
       await this.initialize();
     }
 
-    const result = await this.sendRequest('tools/call', {
+    const result = await this.sendRequest("tools/call", {
       name,
-      arguments: arguments_
+      arguments: arguments_,
     });
 
     return result;
@@ -152,25 +152,27 @@ export class MCPClient {
     for (const tool of tools) {
       // Convert tool name to camelCase function name
       const functionName = this.toCamelCase(tool.name);
-      
+
       // Create a typed function that calls the MCP tool
       api[functionName] = async (input: any) => {
         try {
           const result = await this.callTool(tool.name, input);
-          
+
           // Return the content as a more natural format
           if (result.content && result.content.length > 0) {
-            if (result.content.length === 1 && result.content[0].type === 'text') {
+            if (result.content.length === 1 && result.content[0].type === "text") {
               // If single text result, return just the text
               return result.content[0].text;
             }
             // Otherwise return the full content array
             return result.content;
           }
-          
+
           return result;
         } catch (error) {
-          throw new Error(`Tool '${tool.name}' failed: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(
+            `Tool '${tool.name}' failed: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
       };
     }
@@ -183,12 +185,12 @@ export class MCPClient {
    */
   async generateTypeDefinitions(): Promise<string> {
     const tools = await this.listTools();
-    let definitions = '// Generated TypeScript definitions for MCP tools\n\n';
+    let definitions = "// Generated TypeScript definitions for MCP tools\n\n";
 
     for (const tool of tools) {
       const functionName = this.toCamelCase(tool.name);
       const inputType = this.generateInputType(tool);
-      
+
       definitions += `/**\n * ${tool.description || `Call ${tool.name} tool`}\n */\n`;
       definitions += `${functionName}: (input: ${inputType}) => Promise<any>;\n\n`;
     }
@@ -207,56 +209,56 @@ export class MCPClient {
    * Generate TypeScript input type from MCP tool schema
    */
   private generateInputType(tool: MCPTool): string {
-    if (!tool.inputSchema || tool.inputSchema.type !== 'object') {
-      return 'any';
+    if (!tool.inputSchema || tool.inputSchema.type !== "object") {
+      return "any";
     }
 
     const properties = tool.inputSchema.properties || {};
     const required = tool.inputSchema.required || [];
-    
+
     const typeProps: string[] = [];
-    
+
     for (const [propName, propSchema] of Object.entries(properties)) {
       const isOptional = !required.includes(propName);
       const propType = this.schemaToTypeScript(propSchema);
-      const description = propSchema.description ? `\n  /** ${propSchema.description} */\n  ` : '';
-      
-      typeProps.push(`${description}${propName}${isOptional ? '?' : ''}: ${propType}`);
+      const description = propSchema.description ? `\n  /** ${propSchema.description} */\n  ` : "";
+
+      typeProps.push(`${description}${propName}${isOptional ? "?" : ""}: ${propType}`);
     }
 
     if (typeProps.length === 0) {
-      return '{}';
+      return "{}";
     }
 
-    return `{\n  ${typeProps.join(';\n  ')}\n}`;
+    return `{\n  ${typeProps.join(";\n  ")}\n}`;
   }
 
   /**
    * Convert JSON Schema type to TypeScript type
    */
   private schemaToTypeScript(schema: any): string {
-    if (!schema || typeof schema !== 'object') {
-      return 'any';
+    if (!schema || typeof schema !== "object") {
+      return "any";
     }
 
     switch (schema.type) {
-      case 'string':
-        return 'string';
-      case 'number':
-      case 'integer':
-        return 'number';
-      case 'boolean':
-        return 'boolean';
-      case 'array':
-        const itemType = schema.items ? this.schemaToTypeScript(schema.items) : 'any';
+      case "string":
+        return "string";
+      case "number":
+      case "integer":
+        return "number";
+      case "boolean":
+        return "boolean";
+      case "array":
+        const itemType = schema.items ? this.schemaToTypeScript(schema.items) : "any";
         return `${itemType}[]`;
-      case 'object':
+      case "object":
         if (schema.properties) {
           return this.generateInputType({ inputSchema: schema } as MCPTool);
         }
-        return 'Record<string, any>';
+        return "Record<string, any>";
       default:
-        return 'any';
+        return "any";
     }
   }
 

@@ -1,5 +1,5 @@
-import { MCPClient } from './mcp-client';
-import { Env, GeneratedToolAPI } from './types';
+import { MCPClient } from "./mcp-client";
+import { Env, GeneratedToolAPI } from "./types";
 
 /**
  * Code Mode implementation for Cloudflare Workers
@@ -32,7 +32,7 @@ export class CodeMode {
     }
 
     const typeDefinitions = await this.mcpClient.generateTypeDefinitions();
-    
+
     const workerCode = `
 ${typeDefinitions}
 
@@ -88,27 +88,27 @@ export default {
         compatibilityDate: "2024-10-21",
         mainModule: "index.js",
         modules: {
-          "index.js": workerCode
+          "index.js": workerCode,
         },
         env: {
           // Pass through any necessary environment variables
           // but don't expose sensitive keys directly
         },
         // Block internet access - tools can only access MCP servers through bindings
-        globalOutbound: null
+        globalOutbound: null,
       };
     });
 
     // Execute the code by sending a request to the worker
     const entrypoint = (worker as any).getEntrypoint();
-    const response = await entrypoint.fetch(new Request('http://localhost/'));
-    
+    const response = await entrypoint.fetch(new Request("http://localhost/"));
+
     const result = await response.json();
-    
+
     if (!result.success) {
       throw new Error(result.error);
     }
-    
+
     return result.result;
   }
 
@@ -117,34 +117,34 @@ export default {
    */
   createCodemodeTool() {
     return {
-      name: 'codemode',
-      description: 'Execute TypeScript code that can call MCP tools',
+      name: "codemode",
+      description: "Execute TypeScript code that can call MCP tools",
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           code: {
-            type: 'string',
-            description: 'TypeScript code to execute'
+            type: "string",
+            description: "TypeScript code to execute",
           },
           explanation: {
-            type: 'string',
-            description: 'Brief explanation of what the code does'
-          }
+            type: "string",
+            description: "Brief explanation of what the code does",
+          },
         },
-        required: ['code']
+        required: ["code"],
       },
       execute: async ({ code, explanation }: { code: string; explanation?: string }) => {
         try {
-          console.log(`Executing code: ${explanation || 'No description'}`);
+          console.log(`Executing code: ${explanation || "No description"}`);
           const result = await this.executeInWorker(code);
           return result;
         } catch (error) {
           return {
             error: error instanceof Error ? error.message : String(error),
-            success: false
+            success: false,
           };
         }
-      }
+      },
     };
   }
 
@@ -189,11 +189,11 @@ export async function experimental_codemode(config: {
   useMock?: boolean;
 }) {
   const codeMode = createCodeMode(config.serverUrl, config.env);
-  
+
   try {
     await codeMode.initialize();
   } catch (error) {
-    console.warn('Failed to initialize MCP server, falling back to mock mode:', error);
+    console.warn("Failed to initialize MCP server, falling back to mock mode:", error);
     // If MCP server fails, we could fall back to mock mode here
     throw error;
   }
@@ -204,7 +204,7 @@ export async function experimental_codemode(config: {
   // Combine with existing tools
   const wrappedTools = {
     ...config.tools,
-    codemode: codemodetool
+    codemode: codemodetool,
   };
 
   // Enhanced prompt to encourage code generation
@@ -224,6 +224,6 @@ Always explain what your code does when using the codemode tool.`;
   return {
     prompt: enhancedPrompt,
     tools: wrappedTools,
-    codeMode
+    codeMode,
   };
 }

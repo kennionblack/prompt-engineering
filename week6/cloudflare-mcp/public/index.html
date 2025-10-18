@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare MCP Client Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .status {
+            background: #e8f5e8;
+            border: 1px solid #4caf50;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .chat-container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+            margin-bottom: 20px;
+            background: #fafafa;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user {
+            background: #007bff;
+            color: white;
+            text-align: right;
+        }
+        .assistant {
+            background: #e9ecef;
+            color: #333;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .endpoints {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .endpoint {
+            font-family: monospace;
+            background: white;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Cloudflare MCP Client</h1>
+        
+        <div id="status" class="status">
+            <strong>Status:</strong> <span id="statusText">Checking...</span>
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message assistant">
+                <strong>Assistant:</strong> Hello! I'm an AI assistant running on Cloudflare Workers. Ask me anything!
+            </div>
+        </div>
+
+        <div class="input-container">
+            <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()" id="sendButton">Send</button>
+        </div>
+
+        <div class="endpoints">
+            <h3>Available Endpoints:</h3>
+            <div class="endpoint">GET /health - Health check</div>
+            <div class="endpoint">GET /test - Configuration test</div>
+            <div class="endpoint">POST /chat/simple - Simple chat (working)</div>
+            <div class="endpoint">POST /chat - Full MCP chat (requires MCP server)</div>
+            <div class="endpoint">GET /mcp/tools - List MCP tools</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://cloudflare-mcp-client.19keblack.workers.dev';
+        let messages = [];
+
+        async function checkStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/test`);
+                const data = await response.json();
+                document.getElementById('statusText').innerHTML = `
+                    ✅ Connected | 
+                    OpenAI: ${data.hasOpenAI ? '✅' : '❌'} | 
+                    MCP Server: ${data.mcpServer}
+                `;
+            } catch (error) {
+                document.getElementById('statusText').textContent = '❌ Connection failed';
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const sendButton = document.getElementById('sendButton');
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
+
+            // Add user message to chat
+            messages.push({ role: 'user', content: message });
+            addMessageToChat('user', message);
+            input.value = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/chat/simple`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ messages })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let assistantMessage = '';
+
+                const assistantDiv = addMessageToChat('assistant', '');
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('0:"')) {
+                            try {
+                                const content = JSON.parse(line.substring(2));
+                                assistantMessage += content;
+                                assistantDiv.innerHTML = `<strong>Assistant:</strong> ${assistantMessage}`;
+                            } catch (e) {
+                                // Ignore parse errors for now
+                            }
+                        }
+                    }
+                }
+
+                messages.push({ role: 'assistant', content: assistantMessage });
+
+            } catch (error) {
+                console.error('Chat error:', error);
+                addMessageToChat('assistant', `Error: ${error.message}`);
+            }
+
+            sendButton.disabled = false;
+            sendButton.textContent = 'Send';
+        }
+
+        function addMessageToChat(role, content) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.innerHTML = `<strong>${role === 'user' ? 'You' : 'Assistant'}:</strong> ${content}`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return messageDiv;
+        }
+
+        // Check status on load
+        checkStatus();
+    </script>
+</body>
+</html>

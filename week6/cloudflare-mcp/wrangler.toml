@@ -1,0 +1,21 @@
+name = "cloudflare-mcp-client"
+main = "src/index.ts"
+compatibility_date = "2024-10-21"
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = 8787
+
+[[env.dev.bindings]]
+name = "LOADER"
+type = "worker-loader"
+
+[[env.production.bindings]]
+name = "LOADER"
+type = "worker-loader"
+
+[env.dev]
+name = "cloudflare-mcp-client-dev"
+
+[env.production] 
+name = "cloudflare-mcp-client"

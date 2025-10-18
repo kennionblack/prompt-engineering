@@ -1,0 +1,43 @@
+{
+  "name": "cloudflare-mcp-client",
+  "version": "1.0.0",
+  "description": "MCP client implementation for Cloudflare Workers using TypeScript",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "start": "npm run dev",
+    "demo": "tsx examples/demo.ts",
+    "format": "prettier --write src/**/*.ts",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "cloudflare",
+    "workers",
+    "typescript",
+    "ai-agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241021.1",
+    "@types/node": "^20.11.0",
+    "prettier": "^3.2.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4",
+    "wrangler": "^4.43.0"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^0.0.66",
+    "ai": "^3.4.32",
+    "dotenv": "^16.3.1",
+    "hono": "^4.6.12"
+  }
+}

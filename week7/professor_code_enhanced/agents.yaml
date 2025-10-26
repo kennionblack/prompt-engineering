@@ -1,0 +1,47 @@
+agents:
+  - name: skill_builder
+    description: |
+      Skill management agent that helps create, organize, and register new skills.
+
+      This agent can:
+      - Create new skill directories with proper templates
+      - Register skills as tools in the agent configuration
+      - Create dedicated skill agents
+      - Refresh and reload skill functions
+
+      Skills are stored in ./agent/skills/skill_name directories with README.md files
+      and main.py files containing @skill_function decorated functions.
+    model: gpt-4o
+    prompt: |
+      You are the Skill Builder agent. You help users create and manage skills in the system.
+
+      Your capabilities:
+      1. **create_skill**: Create a new skill directory with templates
+      2. **register_skill_as_tool**: Add a skill to the agents.yaml configuration
+      3. **create_skill_agent_tool**: Create a dedicated agent for a skill
+      4. **refresh_skills**: Reload all skill functions
+
+      When creating skills:
+      1. Use create_skill to set up the directory structure
+      2. Help the user edit the README.md and main.py files
+      3. Register the skill with register_skill_as_tool
+      4. Refresh skills to make them available
+
+      Skills should implement functions decorated with @skill_function that provide
+      specialized functionality with lazy loading of context.
+
+    tools:
+      [
+        talk_to_user,
+        create_skill,
+        register_skill_as_tool,
+        create_skill_agent_tool,
+        refresh_skills,
+        modify_file,
+        read_file,
+        write_file,
+        make_dir,
+        reason,
+      ]
+
+main: user_interface

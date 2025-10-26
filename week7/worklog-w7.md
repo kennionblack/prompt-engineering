@@ -2,6 +2,8 @@
 
 ## Executive Summary
 
+This week, I built two agents with the class-provided framewor. The first agent is able to use isolated code sandboxes with LLM Sandbox and the second agent builds subagents dynamically for user-defined skills.
+
 ## Worklog
 
 <!-- Note that this "table" was mostly generated with a VSCode extension that attempts to make all markdown table cells the same size, hence the strange formatting. I strongly recommend reading this report with something that actually renders the markdown instead of attempting to parse this mess visually. -->
@@ -12,7 +14,8 @@
 | 10/22/25 | 1h   | Attended lecture                                                                                                                                                                                                                                                                                                                                                                 |
 | 10/23/25 | 2h   | Started ideating on what kind of project I want to build<br>Used ChatGPT [deep reasoning research suggestions](https://github.com/kennionblack/prompt-engineering/tree/main/week7/code_reasoning_bot/deep_reasoning_response.txt) to flesh out ideas<br>Preliminary research on existing sandbox tooling, decided on [LLM Sandbox](https://vndee.github.io/llm-sandbox/) for now |
 | 10/24/25 | 2h   | Used class provided code structure to get an agent up and running that can execute arbitrary code in an LLM Sandbox container                                                                                                                                                                                                                                                    |
-| 10/25/25 | 2.5h | Watched [brief video](https://www.youtube.com/watch?v=xckU9n9r8Rs) on parallelizing agents<br>Read up on the [BMAD method](https://github.com/bmad-code-org/BMAD-METHOD) for agentic workflows<br>Look into Claude skills                                                                                                                                                        |
+| 10/25/25 | 3h   | Watched [brief video](https://www.youtube.com/watch?v=xckU9n9r8Rs) on parallelizing agents<br>Read up on the [BMAD method](https://github.com/bmad-code-org/BMAD-METHOD) for agentic workflows<br>Look into Claude skills<br>Start work on a hand-rolled "skills" implementation that allows for user-taught patterns to be used by an AI dynamically                            |
+| 10/26/25 | 1h   | Worked on dynamic tool loading system with observer pattern                                                                                                                                                                                                                                                                                                                      |
 
 ## Class notes
 
@@ -28,6 +31,8 @@
 ## Exercises
 
 I wanted to try out the code in class with some of the ideas that I've been playing with, so I got an agent running that was able to execute code in a container with LLM Sandbox. This agent can be found in [this directory](https://github.com/kennionblack/prompt-engineering/tree/main/week6/cloudflare-mcp) The container is initialized and torn down for each code request, which makes execution times of even simple programs take upwards of a minute.
+
+My larger project at the moment is setting up a model that can learn skills from a user and store information, scripts, etc. about the skills in a skills directory (heavily inspired by the Anthropic article on skills within Claude) with an associated subagent. I'm extending the provided framework from this week to implement this behavior. This is still very much a work in progress, but I've currently got an agent that goes through an iterative development process with the user to determine how a skill should be executed. Once the skill has been properly defined by the user, we create a new `/agent/skills/skill_name` directory with the requisite information. I built tools that manually modify the agents.yaml file to load these skills into the context of other agents without needing manual intervention and will be working on fine-tuning this system next week.
 
 ## Findings
 

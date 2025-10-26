@@ -1,0 +1,16 @@
+# Core dependencies
+openai>=1.0.0
+pyyaml>=6.0
+
+# LLM Sandbox for secure code execution
+llm-sandbox[docker]>=0.1.0
+
+# Optional: Additional backends
+# llm-sandbox[k8s]    # For Kubernetes support
+# llm-sandbox[podman] # For Podman support
+
+# Optional: Enhanced data processing (if using data science features)
+# numpy>=1.24.0
+# pandas>=2.0.0
+# matplotlib>=3.7.0
+# seaborn>=0.12.0

@@ -1,0 +1,48 @@
+So the idea here is to make an ai agent that has access to a code generator subtool to "think". find some way to be able to run that code within an isolated environment (Docker?) and use the results of the code to inform the ai agent reasoning. 
+
+what kind of questions can be answered effectively with code? how can the ai be taught to reason with code?
+
+maybe add some tool to subdivide a problem into smaller chunks
+  - treat it like a function with defined inputs/outputs?
+  - use an evaluation agent to see how well the generated code works, potential improvements
+  - build feedback loop to iterate on the subdivided code problem until it works/is optimized?
+    - can we give it access to a vscode environment with linting or some language server as part of the evalution?
+  - how do we orchestrate the independent code snippets to work together?
+    - functional programming chaining can alleviate some of this
+    - we could also make the orchestration composite the provided code into a class or set of classes as needed. which is better?
+
+
+how do we get the model to want to use code to think instead of immediately relying on its cache of knowledge?
+  - some of this is informed by what question is asked
+  - shortest path or minimization problems are more obviously going to have a code analogue
+  - some cases are arguably not best solved with code. how can we help the ai find this distinction dynamically
+
+bake in a web search tool to look for information?
+  - maybe get it to check live code resources manually (like stack overflow or geeksforgeeks, offical docs for a language/library, etc)
+  - get it to trust live information more than cached information
+
+how can we spin up an isolated environment manually for each code sandbox? 
+  - can we use the same environment across multiple code executions?
+    - Docker seems like a relatively obvious choice
+    - maybe use the js workers thing from cloudflare?
+  - how much of the code should be stateless?
+  - maybe use the same environment for the feedback loop thing but separate environments for separate questions
+  - how can we get external data into the function context?
+  - how can we optimize this for speed? spinning up a new environment with package installs and all that is kind of slow for a pure query interface
+    - do we have a number of environments preloaded?
+      - we could have a certain number of environments available in a queue behind the scenes and start spinning them up once some number is met for remaining unused instances
+      - aws autoscaling seems like the idea we want to replicate here kinda, but I'd rather have this be more self-hosted
+
+how to show that this model is quantifiably better than raw ai reasoning?
+  - what kind of benchmarks are appropriate? TSP, other NP-hard problems present a computational limit while ai may be able to approach it differently
+  - on the flip side, there are some complex problems that can be solved algorithmically that are difficult to "intuit"
+
+should the ai generate code in a different language than python?
+  - what are the tradeoffs? 
+  - do we have different environments for different languages and have the evaluation agent compare outputs from different languages?
+  - what languages are ai good at writing? is the added complexity even worth it?
+  - we could test this with multiple languages at once initially, then pick one to move forward with at scale once we have some idea of how each stacks up in this context
+
+what hardware limitations do we have to have all of these distributed environments working well?
+  - I'll use my computer as much as I can but I can see this scale really really fast
+  - is cloud hosting worth it?

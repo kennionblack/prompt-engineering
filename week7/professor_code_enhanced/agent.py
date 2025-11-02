@@ -15,7 +15,7 @@ load_dotenv()
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Import skill_manager BEFORE creating tool_box so observer can be registered first
+# Import all external tools before creating the toolbox
 import skill_manager
 
 # Now create the toolbox - this will trigger the observer
@@ -252,6 +252,7 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
     history = [{"role": "system", "content": agent["prompt"]}]
     if message is not None:
         history.append({"role": "user", "content": message})
+    # If no message provided, let the agent initiate conversation per its prompt
 
     tools = tool_box.get_tools(agent["tools"])
 
@@ -261,7 +262,6 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
         )
 
         history += response.output
-
         for item in response.output:
             if item.type == "function_call":
                 print(f"---- {agent['name']} calling {item.name} ----")
@@ -276,7 +276,15 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
                 )
 
             elif item.type == "message":
-                return response.output_text
+                # Extract the text from the ResponseOutputText object in the list
+                if isinstance(item.content, list) and len(item.content) > 0:
+                    message_text = item.content[0].text
+                else:
+                    message_text = str(item.content)
+                print(f"\nAI: {message_text}")
+                # Get next user input for continued conversation
+                user_input = input("User: ")
+                history.append({"role": "user", "content": user_input})
 
             elif item.type == "reasoning":
                 print(f"---- {agent['name']} REASONED ----")
@@ -285,7 +293,7 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
                 print(item, file=sys.stderr)
 
 
-def main(config_file: Path):
+async def main(config_file: Path):
     config = load_config(config_file)
     agents = {agent["name"]: agent for agent in config["agents"]}
     add_agent_tools(agents, tool_box)
@@ -294,8 +302,19 @@ def main(config_file: Path):
     skill_manager.load_all_skill_functions("./agent/skills", tool_box)
 
     main_agent = config["main"]
-    asyncio.run(run_agent(agents[main_agent], tool_box, None))
+    await run_agent(agents[main_agent], tool_box, None)
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]))
+    try:
+        if len(sys.argv) == 1:
+            asyncio.run(main(Path("./agents.yaml")))
+        else:
+            asyncio.run(main(Path(sys.argv[1])))
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+
+        traceback.print_exc()

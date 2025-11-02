@@ -9,8 +9,10 @@ from config import Agent
 
 _tools: dict[str, Callable] = {}
 
-# Observer pattern for toolbox registration
+# Observer pattern for toolbox registration and tool change notifications
 _toolbox_observers = []
+_tool_change_observers = []
+_active_toolboxes = []  # Track all active toolboxes
 
 
 def register_toolbox_observer(observer_func):
@@ -18,13 +20,40 @@ def register_toolbox_observer(observer_func):
     _toolbox_observers.append(observer_func)
 
 
+def register_tool_change_observer(observer_func):
+    """Register a function to be called when tools are added/changed"""
+    _tool_change_observers.append(observer_func)
+
+
 def notify_toolbox_created(toolbox):
     """Notify all observers that a toolbox has been created"""
+    _active_toolboxes.append(toolbox)
     for observer in _toolbox_observers:
         try:
             observer(toolbox)
         except Exception as e:
             print(f"Error notifying toolbox observer: {e}")
+
+
+def notify_tool_change(event_type: str, tool_info: dict, source_toolbox=None):
+    """Notify all observers that tools have changed"""
+    for observer in _tool_change_observers:
+        try:
+            observer(event_type, tool_info, source_toolbox)
+        except Exception as e:
+            print(f"Error notifying tool change observer: {e}")
+
+
+def broadcast_reload_to_all_toolboxes(source_toolbox=None):
+    """Trigger reload across all active toolboxes"""
+    for toolbox in _active_toolboxes:
+        if toolbox != source_toolbox:  # Don't reload the source
+            try:
+                # Check if this toolbox has a reload capability
+                if hasattr(toolbox, "reload_external_tools"):
+                    toolbox.reload_external_tools()
+            except Exception as e:
+                print(f"Error during toolbox reload: {e}")
 
 
 def _is_optional(annotation) -> bool:
@@ -48,12 +77,24 @@ def _get_strict_json_schema_type(annotation) -> dict:
         int: "integer",
         float: "number",
         bool: "boolean",
+        list: "array",
+        dict: "object",
     }
 
     if annotation in type_map:
+        if annotation is list:
+            return {
+                "type": "array",
+                "items": {"type": "string"},
+            }  # Default to string items
         return {"type": type_map[annotation]}
 
     if origin in type_map:
+        if origin is list:
+            return {
+                "type": "array",
+                "items": {"type": "string"},
+            }  # Default to string items
         return {"type": type_map[origin]}
 
     if origin is Literal:
@@ -108,6 +149,7 @@ class ToolBox:
     def __init__(self):
         self._funcs = {}
         self._tools = []
+        self._reload_callbacks = []  # Functions to call when reloading
         # Notify observers that a toolbox has been created
         notify_toolbox_created(self)
 
@@ -157,3 +199,28 @@ class ToolBox:
         function.__doc__ = agent["description"]
 
         self.tool(function)
+
+    def register_reload_callback(self, callback_func):
+        """Register a function to be called when this toolbox should reload external tools"""
+        self._reload_callbacks.append(callback_func)
+
+    def reload_external_tools(self):
+        """Trigger reload of external tools (called by observer pattern)"""
+        for callback in self._reload_callbacks:
+            try:
+                result = callback()
+                print(f"🔄 Reloaded tools: {result.get('message', 'success')}")
+            except Exception as e:
+                print(f"Error during tool reload: {e}")
+
+    def notify_tool_added(self, tool_name: str, tool_info: dict = None):
+        """Notify other toolboxes that a new tool was added"""
+        notify_tool_change(
+            "tool_added",
+            {
+                "tool_name": tool_name,
+                "tool_info": tool_info or {},
+                "toolbox_id": id(self),
+            },
+            source_toolbox=self,
+        )

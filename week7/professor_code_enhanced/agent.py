@@ -38,12 +38,38 @@ def talk_to_user(message: str) -> str:
 def talk_to_named_user(name: str, message: str) -> str:
     """Send a message to the specified user and get the user's response.
 
-    This is the ONLY way to communicate with a user,
-    so all information to and from a user will come through this function.
+    This is the ONLY way to communicate with the user,
+    so all information to and from the user will come through this function.
     """
     print()
-    print(f"AI (to {name}): ", message)
+    print(f"AI to {name}: ", message)
     return input(f"{name}: ")
+
+
+class TaskCompleteException(Exception):
+    """Exception to signal task completion and return control to calling agent"""
+
+    def __init__(self, message: str = "Task completed"):
+        self.message = message
+        super().__init__(self.message)
+
+
+@tool_box.tool
+def complete_delegated_task(summary: str) -> str:
+    """Complete a delegated task and return control to the calling agent.
+
+    Use this when you have been called by another agent (like user_interface calling skill_builder)
+    and you have finished the requested task. This will end the current agent's execution
+    and return control to the calling agent.
+
+    Args:
+        summary: A brief summary of what was accomplished
+
+    Returns:
+        The summary message
+    """
+    print(f"\n✅ Task completed: {summary}")
+    raise TaskCompleteException(summary)
 
 
 @tool_box.tool
@@ -242,7 +268,9 @@ def add_agent_tools(agents: dict[str, Agent], tool_box: ToolBox):
         tool_box.add_agent_tool(agent, run_agent)
 
 
-async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
+async def run_agent(
+    agent: Agent, tool_box: ToolBox, message: str | None, interactive: bool = True
+):
     print("")
     print(f"---- RUNNING {agent['name']} ----")
     if message:
@@ -265,15 +293,20 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
         for item in response.output:
             if item.type == "function_call":
                 print(f"---- {agent['name']} calling {item.name} ----")
-                result = await tool_box.run_tool(item.name, **json.loads(item.arguments))
-
-                history.append(
-                    {
-                        "type": "function_call_output",
-                        "call_id": item.call_id,
-                        "output": json.dumps(result),
-                    }
-                )
+                try:
+                    result = await tool_box.run_tool(
+                        item.name, **json.loads(item.arguments)
+                    )
+                    history.append(
+                        {
+                            "type": "function_call_output",
+                            "call_id": item.call_id,
+                            "output": json.dumps(result),
+                        }
+                    )
+                except TaskCompleteException as e:
+                    # Task is complete, return the summary message
+                    return e.message
 
             elif item.type == "message":
                 # Extract the text from the ResponseOutputText object in the list
@@ -282,6 +315,11 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
                 else:
                     message_text = str(item.content)
                 print(f"\nAI: {message_text}")
+
+                # If not in interactive mode (delegation), return the message
+                if not interactive:
+                    return message_text
+
                 # Get next user input for continued conversation
                 user_input = input("User: ")
                 history.append({"role": "user", "content": user_input})
@@ -298,11 +336,9 @@ async def main(config_file: Path):
     agents = {agent["name"]: agent for agent in config["agents"]}
     add_agent_tools(agents, tool_box)
 
-    # Load skill functions on startup
-    skill_manager.load_all_skill_functions("./agent/skills", tool_box)
-
+    # Skills are auto-loaded by the observer pattern in skill_manager
     main_agent = config["main"]
-    await run_agent(agents[main_agent], tool_box, None)
+    await run_agent(agents[main_agent], tool_box, None, interactive=True)
 
 
 if __name__ == "__main__":

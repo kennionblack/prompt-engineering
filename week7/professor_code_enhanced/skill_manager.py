@@ -360,8 +360,18 @@ def get_skill_scripts():
         return list(scripts_dir.glob("*.py"))
     return []
 
-# Import the decorators from skill_manager
-from skill_manager import skill_function, sandbox_skill_function
+# Provide noop decorators if skill system's decorators aren't available in this environment
+try:
+    from skill_manager import skill_function, sandbox_skill_function
+except Exception:
+    def skill_function(func):
+        func.is_skill_function = True
+        return func
+    
+    def sandbox_skill_function(func):
+        func.is_skill_function = True
+        func.auto_sandbox = True
+        return func
 
 @skill_function
 def {skill_name}_main(input_data: str) -> dict:

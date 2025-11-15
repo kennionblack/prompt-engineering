@@ -7,8 +7,6 @@ from openai.types.responses import FunctionToolParam
 
 from config import Agent
 
-_tools: dict[str, Callable] = {}
-
 # Observer pattern for toolbox registration and tool change notifications
 _toolbox_observers = []
 _tool_change_observers = []

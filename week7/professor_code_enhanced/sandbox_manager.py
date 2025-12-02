@@ -105,18 +105,37 @@ class PersistentSandboxManager:
             # Open the session
             session.open()
 
-            # Preload libraries if any
+            # Separate standard library from third-party libraries
+            stdlib = {"json", "pathlib", "datetime", "os", "sys", "time", "traceback"}
+            third_party_libs = [lib for lib in all_libraries if lib not in stdlib]
+            stdlib_libs = [lib for lib in all_libraries if lib in stdlib]
+
+            # Install third-party libraries first (without trying to import yet)
+            if third_party_libs:
+                print(
+                    f"📦 Installing third-party libraries: {', '.join(third_party_libs)}"
+                )
+                # Just run a simple command with libraries parameter to trigger installation
+                install_result = session.run(
+                    code="print('Installation complete')",
+                    libraries=third_party_libs,
+                    timeout=120,  # Longer timeout for installation
+                )
+                if install_result.exit_code != 0:
+                    print(f"⚠️  Warning: Installation issues: {install_result.stderr}")
+
+            # Now preload/import all libraries (they should be installed by now)
             if all_libraries:
                 preload_code = self._get_preload_code(language, all_libraries)
                 if preload_code:
-                    print(f"📦 Preloading libraries: {', '.join(all_libraries)}")
+                    print(f"📦 Importing libraries: {', '.join(all_libraries)}")
                     result = session.run(
-                        code=preload_code, libraries=all_libraries, timeout=60
+                        code=preload_code,
+                        libraries=[],
+                        timeout=60,  # Empty libraries list since already installed
                     )
                     if result.exit_code != 0:
-                        print(
-                            f"⚠️  Warning: Some libraries failed to preload: {result.stderr}"
-                        )
+                        print(f"⚠️  Warning: Some library imports failed: {result.stderr}")
 
             return {
                 "session": session,

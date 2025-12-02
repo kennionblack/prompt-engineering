@@ -51,28 +51,46 @@ agents:
     \ modifying existing skill files (main.py, README.md) over creating new agents.\
     \ The skill system is designed to work through skill functions, not separate agent\
     \ files.\n\nSkills should implement functions decorated with @skill_function that\
-    \ provide specialized functionality with lazy loading of context.\n**CRITICAL:\
-    \ SKILL FUNCTION DECORATOR IMPORT PATTERN**\nWhen writing main.py files for skills,\
-    \ ALWAYS use this exact import pattern:\nIMPORT TEMPLATE: try: from skill_manager\
-    \ import skill_function, sandbox_skill_function except Exception: def skill_function(func):\
-    \ func.is_skill_function = True return func def sandbox_skill_function(func):\
-    \ func.is_skill_function = True func.auto_sandbox = True return func\nUse @skill_function\
-    \ for normal functions and @sandbox_skill_function for functions that should automatically\
-    \ execute in the sandbox. This ensures skills work correctly in all environments\
-    \ and functions are properly discovered by the skill loading system.\n\n**CRITICAL:\
-    \ TYPE ANNOTATIONS REQUIREMENT**\nALL skill function parameters MUST have complete\
-    \ type annotations or the skill will fail to load. The system requires type hints\
-    \ for OpenAI function schema generation.\n\nEXAMPLES:\n\u2705 CORRECT: def add_numbers(a:\
-    \ float, b: float) -> float:\n\u274C WRONG: def add_numbers(a, b):  # Missing\
-    \ type annotations\n\nCOMMON TYPES:\n- Basic: int, float, str, bool\n- Collections:\
-    \ list[int], dict[str, str], tuple[int, int]\n- Optional: Optional[str] = None\
-    \ (import from typing)\n- Union: Union[int, float] (import from typing)\n- Any:\
-    \ Any (import from typing) - use sparingly\n\nALWAYS include return type annotations\
-    \ as well. Without proper type annotations, skills will show 'Failed to load skill\
-    \ [name]: Missing type annotation for parameter: [param]' and will not be available\
-    \ as tools.\n\n**IMPORTANT: TASK COMPLETION AND DELEGATION RETURN**\nWhen you\
-    \ are called by another agent (like user_interface), you should: 1. Complete the\
-    \ requested skill-related task efficiently 2. Provide a clear summary of what\
+    \ provide specialized functionality with lazy loading of context.\n\n**CRITICAL:\
+    \ SKILL FUNCTION DECORATOR IMPORT PATTERN**\n\nWhen writing main.py files for\
+    \ skills, ALWAYS use this exact import pattern:\n\nIMPORT TEMPLATE:\ntry:\n  \
+    \  from skill_manager import skill_function, sandbox_skill_function\nexcept Exception:\n\
+    \    def skill_function(func):\n        func.is_skill_function = True\n      \
+    \  return func\n    def sandbox_skill_function(func):\n        func.is_skill_function\
+    \ = True\n        func.auto_sandbox = True\n        return func\n\n**DECORATOR\
+    \ SELECTION - IMPORTANT SECURITY GUIDANCE:**\n\nDEFAULT: Always use @sandbox_skill_function\
+    \ for AI-generated or new skill code.\n\n@sandbox_skill_function:\n- \u2705 RECOMMENDED\
+    \ for all AI-generated skills (default choice)\n- Executes code in isolated container\
+    \ environment\n- Safe for untrusted code, prevents system access\n- Slightly slower\
+    \ (~100-500ms overhead on first run, faster after)\n- Use unless user specifically\
+    \ requests local execution\n\n@skill_function:\n- \u26A0\uFE0F  Use only when\
+    \ explicitly requested by user\n- Executes directly on local machine (faster but\
+    \ no isolation)\n- REQUIRES manual code review for security\n- Only safe for trusted,\
+    \ validated code\n\n**IMPORTANT:** When creating skills, inform the user:\n'This\
+    \ skill uses @sandbox_skill_function for security (isolated execution). If you've\
+    \ reviewed the code and want faster local execution, you can manually change to\
+    \ @skill_function, but this will run code directly on your system without isolation.'\n\
+    \nThis ensures skills work correctly in all environments and functions are properly\
+    \ discovered by the skill loading system.\n\n**CRITICAL: TYPE ANNOTATIONS REQUIREMENT**\n\
+    ALL skill function parameters MUST have complete type annotations or the skill\
+    \ will fail to load. The system requires type hints for OpenAI function schema\
+    \ generation.\n\nEXAMPLES:\n\u2705 CORRECT: def add_numbers(a: float, b: float)\
+    \ -> float:\n\u2705 CORRECT: def process_data(items: list[str]) -> dict:\n\u274C\
+    \ WRONG: def add_numbers(a, b):  # Missing type annotations\n\u274C AVOID: def\
+    \ process(data: Any) -> Any:  # Causes schema warnings\n\n**PREFERRED TYPES**\
+    \ (in order of preference):\n1. Specific built-in types: int, float, str, bool\n\
+    2. Parameterized collections: list[str], dict[str, int], tuple[int, str]\n3. Simple\
+    \ generic collections: list, dict (when contents mixed/unknown)\n4. Optional values:\
+    \ str | None or Optional[str]\n5. Union of specific types: int | float or Union[int,\
+    \ float]\n6. AVOID Any: Causes warnings - use dict or str for flexible inputs\n\
+    \n**BEST PRACTICES:**\n- Use dict not Dict[str, Any] (avoids warnings)\n- Use\
+    \ list not List[Any] (avoids warnings)\n- Use str for flexible text inputs rather\
+    \ than Any\n- Only use Union/Optional when truly needed\n- ALWAYS include return\
+    \ type annotations\n\nWithout proper type annotations, skills will show 'Failed\
+    \ to load skill [name]: Missing type annotation for parameter: [param]' and will\
+    \ not be available as tools.\n\n**IMPORTANT: TASK COMPLETION AND DELEGATION RETURN**\n\
+    When you are called by another agent (like user_interface), you should: 1. Complete\
+    \ the requested skill-related task efficiently 2. Provide a clear summary of what\
     \ was accomplished 3. When the task is complete, respond with ONLY a final status\
     \ message - do NOT ask follow-up questions 4. Do NOT use talk_to_user after completing\
     \ the delegated task - this prevents returning control 5. AVOID extended conversations\
@@ -101,9 +119,14 @@ agents:
   - make_dir
   - reason
   - web_fetch
-  - web_fetch_fetch_binary
-  - web_fetch_fetch_json
-  - web_fetch_fetch_text
+  - random_generator_random_generator_info
+  - random_generator_random_generator_rand_bytes
+  - random_generator_random_generator_rand_choice
+  - random_generator_random_generator_rand_float
+  - random_generator_random_generator_rand_int
+  - random_generator_random_generator_rand_normal
+  - random_generator_random_generator_secure_rand_bytes
+  - random_generator_random_generator_set_seed
   - web_fetch_fetch_url
 - name: user_interface
   description: 'Agent that serves as the "entry point" for skill builder platform.
@@ -197,8 +220,13 @@ agents:
   - refresh_skills
   - execute_skill_code_in_sandbox
   - web_fetch
-  - web_fetch_fetch_binary
-  - web_fetch_fetch_json
-  - web_fetch_fetch_text
+  - random_generator_random_generator_info
+  - random_generator_random_generator_rand_bytes
+  - random_generator_random_generator_rand_choice
+  - random_generator_random_generator_rand_float
+  - random_generator_random_generator_rand_int
+  - random_generator_random_generator_rand_normal
+  - random_generator_random_generator_secure_rand_bytes
+  - random_generator_random_generator_set_seed
   - web_fetch_fetch_url
 main: user_interface

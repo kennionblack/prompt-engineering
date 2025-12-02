@@ -6,8 +6,7 @@ Used by skills that return large amounts of text (web_fetch, file reading, etc.)
 """
 
 import re
-from typing import Dict, List, Any, Optional
-import asyncio
+from typing import Dict, List, Any
 
 
 class ContentSummarizer:

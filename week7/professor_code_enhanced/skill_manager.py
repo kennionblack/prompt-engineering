@@ -24,6 +24,7 @@ _loaded_skills: Set[str] = set()
 _current_toolbox: ToolBox = None
 
 # Default timeout for skill function execution (in seconds)
+# This is needed unless you've solved the halting problem
 DEFAULT_SKILL_TIMEOUT = 30
 
 
@@ -552,124 +553,6 @@ def {skill_name}_auto_sandbox_demo(data: list) -> dict:
         (skill_directory_path / "README.md").write_text(readme_content)
         (skill_directory_path / "main.py").write_text(main_py_content)
 
-        # Create example helper script showing more sandbox usage patterns
-        helper_script_content = f'''"""
-Helper script for {skill_name} skill demonstrating sandbox patterns
-"""
-
-from sandbox_manager import execute_skill_code
-
-# Example sandbox usage patterns for reference
-
-async def example_data_processing():
-    """Example: Process data with pandas in sandbox"""
-    code = """
-import pandas as pd
-import json
-
-# Sample data
-data = {{"values": [1, 2, 3, 4, 5], "labels": ["A", "B", "C", "D", "E"]}}
-df = pd.DataFrame(data)
-
-# Process
-summary = {{
-    "mean": df["values"].mean(),
-    "std": df["values"].std(),
-    "total": df["values"].sum()
-}}
-
-print(json.dumps(summary, indent=2))
-"""
-    
-    return await execute_skill_code(
-        skill_name="{skill_name}",
-        code=code,
-        language="python",
-        libraries=["pandas", "numpy"],
-        timeout=60
-    )
-
-async def example_web_request():
-    """Example: Make HTTP request in sandbox"""
-    code = """
-import requests
-import json
-
-response = requests.get("https://httpbin.org/json")
-data = response.json()
-
-result = {{
-    "status": response.status_code,
-    "data_keys": list(data.keys()) if isinstance(data, dict) else "not_dict"
-}}
-
-print(json.dumps(result, indent=2))
-"""
-    
-    return await execute_skill_code(
-        skill_name="{skill_name}",
-        code=code,
-        language="python",
-        timeout=30
-    )
-
-async def example_visualization():
-    """Example: Create visualization in sandbox"""
-    code = """
-import matplotlib.pyplot as plt
-import numpy as np
-
-# Generate sample data
-x = np.linspace(0, 10, 100)
-y = np.sin(x)
-
-# Create plot
-plt.figure(figsize=(10, 6))
-plt.plot(x, y, 'b-', linewidth=2)
-plt.title("Sample Sine Wave")
-plt.xlabel("X values")
-plt.ylabel("Y values")
-plt.grid(True)
-plt.show()  # This will be captured automatically
-
-print("Visualization created successfully")
-"""
-    
-    return await execute_skill_code(
-        skill_name="{skill_name}",
-        code=code,
-        language="python",
-        libraries=["matplotlib", "numpy"],
-        timeout=45
-    )
-
-async def example_javascript():
-    """Example: Run JavaScript code in sandbox"""
-    code = """
-const data = [1, 2, 3, 4, 5];
-
-// Process data
-const result = {{
-    sum: data.reduce((a, b) => a + b, 0),
-    average: data.reduce((a, b) => a + b, 0) / data.length,
-    max: Math.max(...data),
-    min: Math.min(...data)
-}};
-
-console.log("JavaScript processing complete:");
-console.log(JSON.stringify(result, null, 2));
-"""
-    
-    return await execute_skill_code(
-        skill_name="{skill_name}",
-        code=code,
-        language="javascript",
-        libraries=["lodash"],
-        timeout=30
-    )
-'''
-        (scripts_dir / "sandbox_examples.py").write_text(helper_script_content)
-
         # Notify all toolboxes that a new skill was created
         notify_tool_change(
             "skill_created",
@@ -698,9 +581,12 @@ def execute_function_in_sandbox(skill_func, skill_name, skill_dir, *args, **kwar
     Execute an entire skill function in a sandbox environment.
 
     This serializes the function call, executes it in the sandbox, and returns the result.
+    Automatically extracts module-level imports from the skill file.
     """
     import inspect
     import json
+    import ast
+    import re
 
     # Get function source code
     try:
@@ -712,6 +598,49 @@ def execute_function_in_sandbox(skill_func, skill_name, skill_dir, *args, **kwar
             "message": "Function cannot be executed in sandbox - use manual sandbox calls instead",
         }
 
+    # Extract module-level imports from the skill's module
+    module_imports = []
+    try:
+        # Get the module source
+        module = inspect.getmodule(skill_func)
+        if module and hasattr(module, "__file__") and module.__file__:
+            module_source = inspect.getsource(module)
+
+            # Parse the module to extract import statements
+            tree = ast.parse(module_source)
+            for node in tree.body:
+                if isinstance(node, ast.Import):
+                    # Handle: import module, import module as alias
+                    for alias in node.names:
+                        if alias.asname:
+                            module_imports.append(
+                                f"import {alias.name} as {alias.asname}"
+                            )
+                        else:
+                            module_imports.append(f"import {alias.name}")
+                elif isinstance(node, ast.ImportFrom):
+                    # Handle: from module import name, from module import name as alias
+                    module_name = node.module or ""
+                    names = []
+                    for alias in node.names:
+                        if alias.asname:
+                            names.append(f"{alias.name} as {alias.asname}")
+                        else:
+                            names.append(alias.name)
+                    module_imports.append(f"from {module_name} import {', '.join(names)}")
+    except Exception as e:
+        print(f"⚠️  Could not extract module imports: {e}")
+
+    # Build import section (filter out skill_manager imports which aren't needed in sandbox)
+    import_section = "\n".join(
+        [
+            imp
+            for imp in module_imports
+            if not imp.startswith("from skill_manager import")
+            and not imp.startswith("import skill_manager")
+        ]
+    )
+
     # Create a sandbox execution script
     execution_script = f"""
 import json
@@ -722,12 +651,23 @@ from pathlib import Path
 SKILL_DIR = Path("{skill_dir}")
 SKILL_NAME = "{skill_name}"
 
+# Define stub decorators
+# It's easier to have no-op decorators than modify the ast parsing
+def skill_function(func):
+    return func
+
+def sandbox_skill_function(func):
+    return func
+
+# Module-level imports from skill file
+{import_section}
+
 # Function source code
 {func_source}
 
 # Arguments passed to function
-args = {json.dumps(list(args)) if args else "[]"}
-kwargs = {json.dumps(kwargs) if kwargs else "{{}}"}
+args = {repr(list(args)) if args else "[]"}
+kwargs = {repr(kwargs) if kwargs else "{{}}"}
 
 try:
     # Execute the function
@@ -755,9 +695,109 @@ except Exception as e:
     print("SANDBOX_RESULT:", json.dumps(error_output))
 """
 
-    # Execute in sandbox
+    # Extract library names from imports for sandbox installation
+    # List of Python standard library modules that don't need installation
+    stdlib_modules = {
+        "json",
+        "sys",
+        "os",
+        "pathlib",
+        "datetime",
+        "time",
+        "traceback",
+        "typing",
+        "collections",
+        "base64",
+        "hashlib",
+        "re",
+        "math",
+        "random",
+        "string",
+        "itertools",
+        "functools",
+        "operator",
+        "copy",
+        "pickle",
+        "io",
+        "tempfile",
+        "shutil",
+        "glob",
+        "fnmatch",
+        "linecache",
+        "struct",
+        "codecs",
+        "locale",
+        "gettext",
+        "logging",
+        "platform",
+        "errno",
+        "ctypes",
+        "abc",
+        "atexit",
+        "warnings",
+        "contextlib",
+        "weakref",
+        "array",
+        "bisect",
+        "heapq",
+        "enum",
+        "decimal",
+        "fractions",
+        "statistics",
+        "unicodedata",
+        "textwrap",
+        "inspect",
+        "ast",
+        "dis",
+        "importlib",
+        "pkgutil",
+        "zipimport",
+        "threading",
+        "multiprocessing",
+        "subprocess",
+        "queue",
+        "asyncio",
+        "socket",
+        "ssl",
+        "email",
+        "urllib",
+        "http",
+        "html",
+        "xml",
+        "csv",
+        "configparser",
+        "argparse",
+        "getopt",
+        "pprint",
+        "reprlib",
+    }
+
+    libraries = []
+    for imp in module_imports:
+        if imp.startswith("import "):
+            # Extract base module name from "import requests" or "import requests as req"
+            lib = imp.split()[1].split(" as ")[0].split(".")[0]
+            if lib not in stdlib_modules:
+                libraries.append(lib)
+        elif imp.startswith("from ") and " import " in imp:
+            # Extract base module from "from requests import Session"
+            lib = imp.split("from ")[1].split(" import")[0].strip().split(".")[0]
+            if lib and lib not in stdlib_modules:
+                libraries.append(lib)
+
+    # Remove duplicates
+    libraries = list(set(libraries))
+
+    if libraries:
+        print(f"📦 Detected libraries for sandbox: {', '.join(libraries)}")
+
+    # Execute in sandbox with detected libraries
     sandbox_result = run_code_in_sandbox(
-        skill_name=skill_name, code=execution_script, language="python", timeout=60
+        skill_name=skill_name,
+        code=execution_script,
+        language="python",
+        libraries=libraries,
+        timeout=60,
     )
 
     # Parse the result from sandbox output

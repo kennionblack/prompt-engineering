@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+import logging
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -13,13 +14,49 @@ import os
 
 load_dotenv()
 
+# Suppress httpx info logs that managed to turn themselves on
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Import all external tools before creating the toolbox
-import skill_manager
+# Global agents registry for runtime reloading
+_current_agents = {}
+_config_file_path = Path("./agents.yaml")
 
-# Now create the toolbox - this will trigger the observer
+# Register skill system observers before creating ToolBox
+from skill_observer import register_skill_observers
+
+register_skill_observers()
+
+# Now create the toolbox - observers will auto-load skills
 tool_box = ToolBox()
+
+
+def reload_agents_from_config():
+    """
+    Reload agents from config file and re-register them with the toolbox.
+    Called when skills are created/removed to pick up new skill agents.
+    """
+    from skill_lifecycle import sync_skill_agents_to_all_tools
+
+    # Sync skill agents to all tools lists
+    sync_result = sync_skill_agents_to_all_tools(str(_config_file_path))
+    if sync_result.get("updates"):
+        print(f"🔄 Synced {len(sync_result['updates'])} skill agent(s) to tools lists")
+
+    # Reload config
+    config = load_config(_config_file_path)
+    updated_agents = {agent["name"]: agent for agent in config["agents"]}
+
+    # Re-register ALL agents to pick up tool list changes
+    for name, agent in updated_agents.items():
+        tool_box.add_agent_tool(agent, run_agent)
+
+    # Update global registry
+    _current_agents.clear()
+    _current_agents.update(updated_agents)
+
+    print(f"✅ Reloaded {len(updated_agents)} agent(s)")
 
 
 @tool_box.tool
@@ -203,6 +240,11 @@ def add_agent_tools(agents: dict[str, Agent], tool_box: ToolBox):
 async def run_agent(
     agent: Agent, tool_box: ToolBox, message: str | None, interactive: bool = True
 ):
+    # Always use the current agent config to pick up runtime updates
+    agent_name = agent["name"]
+    if agent_name in _current_agents:
+        agent = _current_agents[agent_name]
+
     print("")
     print(f"---- RUNNING {agent['name']} ----")
     if message:
@@ -242,9 +284,16 @@ async def run_agent(
     elif message is not None:
         history.append({"role": "user", "content": message})
 
-    tools = tool_box.get_tools(agent["tools"])
-
     while True:
+        # Get fresh tools list on each iteration (picks up newly registered agents)
+        tools = tool_box.get_tools(agent["tools"])
+
+        # Debug: print tool count
+        if len(tools) > 20:
+            print(
+                f"⚠️  Agent {agent['name']} has {len(tools)} tools (expected ~{len(agent['tools'])})"
+            )
+
         response = await client.responses.create(
             input=history, model="gpt-5-mini", tools=tools, **agent.get("kwargs", {})
         )
@@ -257,11 +306,17 @@ async def run_agent(
                     result = await tool_box.run_tool(
                         item.name, **json.loads(item.arguments)
                     )
+
+                    # Apply chunking to large results before adding to history
+                    from result_chunker import chunk_large_result
+
+                    chunked_result = chunk_large_result(result)
+
                     history.append(
                         {
                             "type": "function_call_output",
                             "call_id": item.call_id,
-                            "output": json.dumps(result),
+                            "output": json.dumps(chunked_result),
                         }
                     )
                 except TaskCompleteException as e:
@@ -292,11 +347,41 @@ async def run_agent(
 
 
 async def main(config_file: Path):
+    global _config_file_path, _current_agents
+    _config_file_path = config_file
+
+    # First, sync all skill agents to ensure they're in all agents' tools lists
+    # This is a repair operation for agents created before auto-add logic
+    from skill_lifecycle import sync_skill_agents_to_all_tools
+
+    sync_result = sync_skill_agents_to_all_tools(str(config_file))
+    if sync_result.get("updates"):
+        print(f"Synced skill agents: {len(sync_result['updates'])} updates made")
+
     config = load_config(config_file)
     agents = {agent["name"]: agent for agent in config["agents"]}
     add_agent_tools(agents, tool_box)
 
     # Skills are auto-loaded by the observer pattern in skill_manager
+    # After skills load, agents.yaml may have been updated with new skill agents
+    # Reload config and re-register ALL agents to pick up tool list changes
+    updated_config = load_config(config_file)
+    updated_agents = {agent["name"]: agent for agent in updated_config["agents"]}
+
+    # Re-register ALL agents (existing agents may have new tools added)
+    # This ensures agent tool lists are current
+    for name, agent in updated_agents.items():
+        if name not in agents:
+            # New agent - register it
+            tool_box.add_agent_tool(agent, run_agent)
+        else:
+            # Existing agent - update its registration to pick up new tools
+            # The agent may have had skill agents added to its tools list
+            tool_box.add_agent_tool(agent, run_agent)
+
+    agents = updated_agents  # Use the updated agents dict
+    _current_agents.update(agents)  # Update global registry
+
     main_agent = config["main"]
     await run_agent(agents[main_agent], tool_box, None, interactive=True)
 

@@ -3,7 +3,9 @@ import json
 import ast
 import asyncio
 import concurrent.futures
-from typing import Dict, Any, Callable, List
+from typing import Dict, Any, Callable
+import importlib.metadata
+import importlib.util
 
 from sandbox_manager import execute_skill_code
 from result_chunker import chunk_large_result
@@ -140,20 +142,48 @@ def detect_libraries_from_imports(imports: list[str]) -> list[str]:
         imports: List of import statement strings
 
     Returns:
-        List of unique third-party library names
+        List of unique third-party library names (mapped to package names)
     """
+
+    def get_package_name(module_name: str) -> str:
+        """Get the PyPI package name for a module using importlib.metadata."""
+        try:
+            spec = importlib.util.find_spec(module_name)
+            if spec is None:
+                return module_name
+
+            try:
+                # Get all distributions and find which one provides this module
+                for dist in importlib.metadata.distributions():
+                    # Check if this distribution provides the module
+                    if dist.files:
+                        for file in dist.files:
+                            if file.match(f"{module_name}/__init__.py") or file.match(
+                                f"{module_name}.py"
+                            ):
+                                return dist.metadata["Name"]
+            except Exception:
+                pass
+
+            # Fallback: assume module name matches package name
+            return module_name
+        except Exception:
+            return module_name
+
     libraries = []
     for imp in imports:
         if imp.startswith("import "):
             # Extract base module name from "import module" or "import module as alias" statements
             lib = imp.split()[1].split(" as ")[0].split(".")[0]
             if lib not in STDLIB_MODULES:
-                libraries.append(lib)
+                package_name = get_package_name(lib)
+                libraries.append(package_name)
         elif imp.startswith("from ") and " import " in imp:
             # Extract base module from "from module import name" statements
             lib = imp.split("from ")[1].split(" import")[0].strip().split(".")[0]
             if lib and lib not in STDLIB_MODULES:
-                libraries.append(lib)
+                package_name = get_package_name(lib)
+                libraries.append(package_name)
 
     # Remove duplicates
     return list(set(libraries))

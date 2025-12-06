@@ -1,7 +1,9 @@
 import asyncio
 from pathlib import Path
-from typing import Dict, Any, Set
 import concurrent.futures
+
+from config import load_config
+from agent import add_agent_tools, _current_agents
 
 from skill_decorators import (
     DEFAULT_SKILL_TIMEOUT,
@@ -51,10 +53,6 @@ from sandbox_manager import (
 _current_toolbox: ToolBox = None
 
 
-# Note: Observer registration moved to skill_observer.py to avoid heavy imports in agent.py
-# The functions below are called by the observer but not exported at module level
-
-
 # Observer pattern for toolbox creation and tool changes
 def _on_toolbox_created(toolbox):
     """Observer function called when a toolbox is created"""
@@ -101,11 +99,6 @@ def _reload_agents_if_available():
         pass
 
 
-# Note: Observer registration moved to skill_observer.py
-# register_toolbox_observer(_on_toolbox_created) - now in skill_observer.py
-# register_tool_change_observer(_on_tool_change) - now in skill_observer.py
-
-
 def register_skill_management_tools(toolbox):
     """Register skill management tools with the provided toolbox"""
 
@@ -124,9 +117,6 @@ def register_skill_management_tools(toolbox):
         """
         return create_skill_directory(path, skill_name)
 
-    # Note: register_skill_as_tool removed - skill agents provide the interface
-    # The underlying add_skill_as_tool function remains in skill_lifecycle.py for manual use if needed
-
     @toolbox.tool
     def create_skill_agent_tool(skill_name: str, skill_description: str = "") -> dict:
         """Create a skill agent configuration in agents.yaml"""
@@ -134,8 +124,41 @@ def register_skill_management_tools(toolbox):
 
     @toolbox.tool
     def refresh_skills() -> dict:
-        """Refresh all skills by reloading skill functions"""
-        return load_all_skill_functions("./agent/skills", toolbox)
+        """
+        Refresh all skills AND reload agent tools (use after creating new skill agents).
+        This ensures new skill agents are immediately available.
+
+        Returns:
+            dict: Result with success status and details about what was reloaded
+        """
+
+        skills_result = load_all_skill_functions("./agent/skills", toolbox)
+
+        try:
+            config = load_config(Path("./agents.yaml"))
+            new_agents = {agent["name"]: agent for agent in config["agents"]}
+
+            _current_agents.update(new_agents)
+
+            # Re-register all agent tools (including new skill agents)
+            add_agent_tools(new_agents, toolbox)
+
+            return {
+                "success": True,
+                "message": f"Reloaded {skills_result.get('loaded_count', 0)} skill functions and {len(new_agents)} agents",
+                "skills_loaded": skills_result.get("loaded_count", 0),
+                "agents_registered": len(new_agents),
+                "skills_result": skills_result,
+            }
+        except Exception as e:
+            import traceback
+
+            return {
+                "success": False,
+                "error": f"Failed to reload agents: {str(e)}",
+                "traceback": traceback.format_exc(),
+                "skills_result": skills_result,
+            }
 
     @toolbox.tool
     def check_for_skill_changes() -> dict:

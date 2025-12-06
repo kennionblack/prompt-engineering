@@ -275,10 +275,12 @@ async def run_agent(
                     if isinstance(item.content, list)
                     else str(item.content)
                 )
-                print(f"\nAI: {greeting_text}")
+                # Use talk_to_user tool to send greeting and get response
+                user_input = await tool_box.run_tool(
+                    "talk_to_user", message=greeting_text
+                )
                 break
 
-        user_input = input("User: ")
         history.append({"role": "user", "content": user_input})
 
     elif message is not None:
@@ -329,14 +331,10 @@ async def run_agent(
                     message_text = item.content[0].text
                 else:
                     message_text = str(item.content)
-                print(f"\nAI: {message_text}")
 
-                # If not in interactive mode (delegation), return the message
-                if not interactive:
-                    return message_text
-
-                # Get next user input for continued conversation
-                user_input = input("User: ")
+                # Always use talk_to_user tool for communication
+                # This allows web interface to override it
+                user_input = await tool_box.run_tool("talk_to_user", message=message_text)
                 history.append({"role": "user", "content": user_input})
 
             elif item.type == "reasoning":
@@ -387,15 +385,23 @@ async def main(config_file: Path):
 
 
 if __name__ == "__main__":
-    try:
-        if len(sys.argv) == 1:
-            asyncio.run(main(Path("./agents.yaml")))
-        else:
-            asyncio.run(main(Path(sys.argv[1])))
-    except KeyboardInterrupt:
-        print("\nInterrupted by user")
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
+    # Check for web mode flag
+    if "--web" in sys.argv:
+        from web_interface import main as web_main
 
-        traceback.print_exc()
+        web_main()
+    else:
+        # CLI mode
+        try:
+            if len(sys.argv) == 1:
+                asyncio.run(main(Path("./agents.yaml")))
+            else:
+                config_file = sys.argv[1] if sys.argv[1] != "--web" else "./agents.yaml"
+                asyncio.run(main(Path(config_file)))
+        except KeyboardInterrupt:
+            print("\nInterrupted by user")
+        except Exception as e:
+            print(f"Error: {e}")
+            import traceback
+
+            traceback.print_exc()

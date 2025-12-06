@@ -2,8 +2,8 @@ import threading
 from typing import Callable
 
 # Default timeout for skill function execution (in seconds)
-# Required unless you have a solution for the halting problem
-DEFAULT_SKILL_TIMEOUT = 30
+# Increased to 120s to allow for slower network requests and sandbox startup
+DEFAULT_SKILL_TIMEOUT = 120
 
 
 def run_with_timeout(func, timeout_seconds=DEFAULT_SKILL_TIMEOUT, *args, **kwargs):

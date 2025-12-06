@@ -288,11 +288,55 @@ class ToolBox:
 
     async def run_tool(self, tool_name: str, **kwargs):
         tool = self._funcs.get(tool_name)
-        result = tool(**kwargs)
+
+        # Convert JSON types to Python types based on function signature
+        converted_kwargs = self._convert_tool_arguments(tool, kwargs)
+
+        result = tool(**converted_kwargs)
         if inspect.iscoroutine(result):
             return await result
         else:
             return result
+
+    def _convert_tool_arguments(self, func: Callable, kwargs: dict) -> dict:
+        """
+        Convert JSON-compatible arguments to Python types based on function signature.
+        Handles cases like: list -> tuple, ensures correct types.
+        """
+        try:
+            sig = inspect.signature(func)
+            type_hints = get_type_hints(func)
+            converted = {}
+
+            for arg_name, arg_value in kwargs.items():
+                if arg_name not in sig.parameters:
+                    # Pass arg through if not recognized
+                    converted[arg_name] = arg_value
+                    continue
+
+                param = sig.parameters[arg_name]
+                expected_type = type_hints.get(arg_name, param.annotation)
+
+                # Skip if no type hint or type hint is empty
+                if expected_type is inspect.Parameter.empty:
+                    converted[arg_name] = arg_value
+                    continue
+
+                # Handle tuple conversion
+                origin = get_origin(expected_type)
+                if origin is tuple or expected_type is tuple:
+                    if isinstance(arg_value, (list, tuple)):
+                        converted[arg_name] = tuple(arg_value)
+                    else:
+                        converted[arg_name] = arg_value
+                # TODO: extend other conversions as needed
+                else:
+                    converted[arg_name] = arg_value
+
+            return converted
+        except Exception as e:
+            print(f"Warning: Failed to convert arguments for tool: {e}")
+            return kwargs
 
     def add_agent_tool(self, agent: Agent, run_agent):
         async def function(message: str) -> str:

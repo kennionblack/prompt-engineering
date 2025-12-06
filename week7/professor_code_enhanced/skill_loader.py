@@ -5,7 +5,7 @@ import inspect
 import ast
 import logging
 from pathlib import Path
-from typing import Dict, Any, Set, List, Tuple
+from typing import Dict, Any, Set, List, Tuple, get_origin, get_type_hints
 
 from skill_decorators import DEFAULT_SKILL_TIMEOUT, run_with_timeout
 from skill_execution import execute_function_in_sandbox
@@ -13,6 +13,53 @@ from skill_execution import execute_function_in_sandbox
 _loaded_skills: Set[str] = set()
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_json_to_python_types(func, kwargs: dict) -> dict:
+    """
+    Convert JSON-compatible arguments to Python types based on function signature.
+    """
+    try:
+        sig = inspect.signature(func)
+        type_hints = get_type_hints(func)
+        converted = {}
+
+        for arg_name, arg_value in kwargs.items():
+            if arg_name not in sig.parameters:
+                converted[arg_name] = arg_value
+                continue
+
+            param = sig.parameters[arg_name]
+            expected_type = type_hints.get(arg_name, param.annotation)
+
+            if expected_type is inspect.Parameter.empty:
+                converted[arg_name] = arg_value
+                continue
+
+            # Handle tuple conversion (JSON arrays -> Python tuples)
+            origin = get_origin(expected_type)
+            if origin is tuple or expected_type is tuple:
+                if isinstance(arg_value, (list, tuple)):
+                    converted[arg_name] = tuple(arg_value)
+                elif arg_value == "" or arg_value == "null":
+                    # Empty string or "null" string -> None
+                    converted[arg_name] = None
+                else:
+                    converted[arg_name] = arg_value
+            # Handle empty string -> None for optional types
+            elif arg_value == "" or arg_value == "null":
+                # Check if parameter has default or is Optional
+                if param.default is not inspect.Parameter.empty:
+                    converted[arg_name] = None
+                else:
+                    converted[arg_name] = arg_value
+            else:
+                converted[arg_name] = arg_value
+
+        return converted
+    except Exception as e:
+        logger.warning(f"Failed to convert arguments for {func.__name__}: {e}")
+        return kwargs
 
 
 def extract_functions_from_ast(skill_path: Path) -> Dict[str, Dict[str, Any]]:
@@ -284,6 +331,9 @@ def create_lazy_skill_wrapper(
 
             timeout = getattr(skill_func, "timeout", DEFAULT_SKILL_TIMEOUT)
 
+            # Convert JSON types to Python types based on function signature
+            converted_kwargs = _convert_json_to_python_types(skill_func, kwargs)
+
             # Execute based on sandbox flag
             if is_sandbox or getattr(skill_func, "auto_sandbox", False):
                 return run_with_timeout(
@@ -293,10 +343,10 @@ def create_lazy_skill_wrapper(
                     skill_name,
                     str(skill_dir),
                     *args,
-                    **kwargs,
+                    **converted_kwargs,
                 )
             else:
-                return run_with_timeout(skill_func, timeout, *args, **kwargs)
+                return run_with_timeout(skill_func, timeout, *args, **converted_kwargs)
 
         except Exception as e:
             logger.error(f"Error executing {func_name} from {skill_name}: {e}")

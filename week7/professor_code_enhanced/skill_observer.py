@@ -26,7 +26,14 @@ def register_skill_observers():
         import skill_manager
 
         skill_manager._current_toolbox = toolbox
-        skill_manager.register_skill_management_tools(toolbox)
+
+        # Get the function after module is fully loaded
+        if hasattr(skill_manager, "register_skill_management_tools"):
+            skill_manager.register_skill_management_tools(toolbox)
+        else:
+            print(
+                "Warning: skill_manager.register_skill_management_tools not available yet"
+            )
 
         # Register reload callback for this toolbox
         toolbox.register_reload_callback(

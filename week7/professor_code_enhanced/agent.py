@@ -2,12 +2,24 @@ import asyncio
 import json
 import sys
 import logging
+import traceback
 from pathlib import Path
 
 from openai import AsyncOpenAI
 
 from config import Agent, load_config
 from tools import ToolBox
+from s3_sync import S3SkillSync, sync_to_s3
+from skill_execution import validate_python_code, validate_skill_code_with_wrapper
+from result_chunker import chunk_large_result
+from agent_registry import (
+    get_current_agents,
+    set_config_file_path,
+    reload_agents_from_config as _reload_agents,
+    add_agent_tools,
+)
+from skill_observer import register_skill_observers
+from skill_lifecycle import sync_skill_agents_to_all_tools
 
 from dotenv import load_dotenv
 import os
@@ -19,16 +31,52 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Global agents registry for runtime reloading
-_current_agents = {}
-_config_file_path = Path("./agents.yaml")
+
+def _handle_session_end_cli():
+    """Handle session end with S3 sync and deletion confirmation"""
+    print("\nChecking for skill changes...")
+    syncer = S3SkillSync()
+    deleted_skills = syncer.get_deleted_skills()
+    modified_skills = syncer.get_modified_skills()
+
+    changes_found = False
+
+    if deleted_skills:
+        changes_found = True
+        print("\nThe following skills exist in S3 but were deleted locally:")
+        for skill in sorted(deleted_skills):
+            print(f"  • {skill}")
+
+    if modified_skills:
+        changes_found = True
+        print("\nThe following skills have been modified locally:")
+        for skill in sorted(modified_skills.keys()):
+            print(f"  • {skill}")
+    if changes_found:
+        if deleted_skills:
+            response = (
+                input("\nDo you want to delete removed skills from S3? (yes/no): ")
+                .strip()
+                .lower()
+            )
+
+            if response in ["yes", "y"]:
+                print("\nDeleting skills from S3...")
+                syncer.delete_skills_from_s3(list(deleted_skills))
+            else:
+                print("\nKeeping removed skills in S3")
+
+        if modified_skills:
+            print("\nUploading modified skills to S3...")
+
+    print("\nSyncing all skills to S3...")
+    sync_to_s3()
+    print("\nSession ended successfully")
+
 
 # Register skill system observers before creating ToolBox
-from skill_observer import register_skill_observers
-
 register_skill_observers()
 
-# Now create the toolbox - observers will auto-load skills
 tool_box = ToolBox()
 
 
@@ -37,26 +85,7 @@ def reload_agents_from_config():
     Reload agents from config file and re-register them with the toolbox.
     Called when skills are created/removed to pick up new skill agents.
     """
-    from skill_lifecycle import sync_skill_agents_to_all_tools
-
-    # Sync skill agents to all tools lists
-    sync_result = sync_skill_agents_to_all_tools(str(_config_file_path))
-    if sync_result.get("updates"):
-        print(f"🔄 Synced {len(sync_result['updates'])} skill agent(s) to tools lists")
-
-    # Reload config
-    config = load_config(_config_file_path)
-    updated_agents = {agent["name"]: agent for agent in config["agents"]}
-
-    # Re-register ALL agents to pick up tool list changes
-    for name, agent in updated_agents.items():
-        tool_box.add_agent_tool(agent, run_agent)
-
-    # Update global registry
-    _current_agents.clear()
-    _current_agents.update(updated_agents)
-
-    print(f"✅ Reloaded {len(updated_agents)} agent(s)")
+    _reload_agents(tool_box, run_agent)
 
 
 @tool_box.tool
@@ -152,9 +181,87 @@ def make_dir(path: str):
     Path(path).mkdir(parents=True, exist_ok=True)
 
 
+def _validate_python_file(file_path: Path, content: str) -> dict:
+    """
+    Validate Python file content. Determines if it's a skill main.py and applies
+    appropriate validation (with or without sandbox wrapper).
+
+    Args:
+        file_path: Path to the Python file
+        content: Python code to validate
+
+    Returns:
+        Dictionary with 'success' bool, 'errors' list, and 'warnings' list
+    """
+    # Check if this is a skill main.py file
+    is_skill_main = file_path.name == "main.py" and "skills" in file_path.parts
+
+    if is_skill_main:
+        # Extract skill name from path
+        try:
+            skills_idx = file_path.parts.index("skills")
+            skill_name = (
+                file_path.parts[skills_idx + 1]
+                if skills_idx + 1 < len(file_path.parts)
+                else "unknown"
+            )
+        except (ValueError, IndexError):
+            skill_name = "unknown"
+
+        # Validate with sandbox wrapper for skill files
+        return validate_skill_code_with_wrapper(content, skill_name)
+    else:
+        # Standard validation for non-skill Python files
+        return validate_python_code(content, str(file_path))
+
+
 @tool_box.tool
-def write_file(path: str, content: str):
-    Path(path).resolve().write_text(content)
+def write_file(path: str, content: str) -> dict:
+    """
+    Write content to a file. For Python files, validates syntax before writing.
+
+    Args:
+        path: File path to write to
+        content: Content to write
+
+    Returns:
+        Dictionary with success status and any validation warnings
+    """
+    file_path = Path(path).resolve()
+
+    # Validate Python files before writing
+    if file_path.suffix == ".py":
+        validation = _validate_python_file(file_path, content)
+
+        if not validation["success"]:
+            error_msg = "\n".join(validation["errors"])
+            return {
+                "success": False,
+                "error": f"Python validation failed:\n{error_msg}",
+                "validation_errors": validation["errors"],
+            }
+
+        # Write the file
+        file_path.write_text(content)
+
+        # Return success with any warnings
+        result = {
+            "success": True,
+            "message": f"File written successfully: {file_path.name}",
+        }
+
+        if validation["warnings"]:
+            result["warnings"] = validation["warnings"]
+            result["message"] += f" (with {len(validation['warnings'])} warnings)"
+
+        return result
+    else:
+        # Non-Python files - write directly
+        file_path.write_text(content)
+        return {
+            "success": True,
+            "message": f"File written successfully: {file_path.name}",
+        }
 
 
 @tool_box.tool
@@ -217,31 +324,52 @@ def modify_file(path: str, old_text: str, new_text: str) -> dict:
             content = ""
 
         if old_text not in content:
+            ellipsis = "..." if len(old_text) > 50 else ""
             return {
                 "success": False,
-                "message": f"Target text not found in file: '{old_text[:50]}{'...' if len(old_text) > 50 else ''}'",
+                "message": f"Target text not found in file: '{old_text[:50]}{ellipsis}'",
             }
 
         modified_content = content.replace(old_text, new_text, 1)
 
-        file_path.write_text(modified_content)
+        # Validate Python files after modification
+        if file_path.suffix == ".py":
+            validation = _validate_python_file(file_path, modified_content)
 
-        return {"success": True, "message": f"Successfully modified {file_path.name}"}
+            if not validation["success"]:
+                error_msg = "\n".join(validation["errors"])
+                return {
+                    "success": False,
+                    "message": f"Modification would create invalid Python code:\n{error_msg}",
+                    "validation_errors": validation["errors"],
+                }
+
+            file_path.write_text(modified_content)
+
+            result = {
+                "success": True,
+                "message": f"Successfully modified {file_path.name}",
+            }
+
+            if validation["warnings"]:
+                result["warnings"] = validation["warnings"]
+                result["message"] += f" (with {len(validation['warnings'])} warnings)"
+
+            return result
+        else:
+            # If it's not a skill file, write directly without validation
+            file_path.write_text(modified_content)
+            return {"success": True, "message": f"Successfully modified {file_path.name}"}
 
     except Exception as e:
         return {"success": False, "message": f"Failed to modify file {path}: {str(e)}"}
 
 
-def add_agent_tools(agents: dict[str, Agent], tool_box: ToolBox):
-    for name, agent in agents.items():
-        tool_box.add_agent_tool(agent, run_agent)
-
-
 async def run_agent(
     agent: Agent, tool_box: ToolBox, message: str | None, interactive: bool = True
 ):
-    # Always use the current agent config to pick up runtime updates
     agent_name = agent["name"]
+    _current_agents = get_current_agents()
     if agent_name in _current_agents:
         agent = _current_agents[agent_name]
 
@@ -310,8 +438,6 @@ async def run_agent(
                     )
 
                     # Apply chunking to large results before adding to history
-                    from result_chunker import chunk_large_result
-
                     chunked_result = chunk_large_result(result)
 
                     history.append(
@@ -322,20 +448,26 @@ async def run_agent(
                         }
                     )
                 except TaskCompleteException as e:
-                    # Task is complete, return the summary message
                     return e.message
 
             elif item.type == "message":
-                # Extract the text from the ResponseOutputText object in the list
                 if isinstance(item.content, list) and len(item.content) > 0:
                     message_text = item.content[0].text
                 else:
                     message_text = str(item.content)
 
-                # Always use talk_to_user tool for communication
-                # This allows web interface to override it
-                user_input = await tool_box.run_tool("talk_to_user", message=message_text)
-                history.append({"role": "user", "content": user_input})
+                # Check if this agent is allowed to talk to user
+                agent_tools = agent.get("tools", [])
+                if "talk_to_user" in agent_tools:
+                    user_input = await tool_box.run_tool(
+                        "talk_to_user", message=message_text
+                    )
+                    history.append({"role": "user", "content": user_input})
+                else:
+                    # Delegated agent trying to communicate - this is an error
+                    # Return the message as the agent's final output
+                    # print(f"Delegated agent '{agent['name']}' attempted to send message {message_text[:100]}")
+                    return message_text
 
             elif item.type == "reasoning":
                 print(f"---- {agent['name']} REASONED ----")
@@ -345,20 +477,16 @@ async def run_agent(
 
 
 async def main(config_file: Path):
-    global _config_file_path, _current_agents
-    _config_file_path = config_file
+    set_config_file_path(config_file)
 
-    # First, sync all skill agents to ensure they're in all agents' tools lists
-    # This is a repair operation for agents created before auto-add logic
-    from skill_lifecycle import sync_skill_agents_to_all_tools
-
+    # Sync all tools to ensure that they are available
     sync_result = sync_skill_agents_to_all_tools(str(config_file))
     if sync_result.get("updates"):
         print(f"Synced skill agents: {len(sync_result['updates'])} updates made")
 
     config = load_config(config_file)
     agents = {agent["name"]: agent for agent in config["agents"]}
-    add_agent_tools(agents, tool_box)
+    add_agent_tools(agents, tool_box, run_agent)
 
     # Skills are auto-loaded by the observer pattern in skill_manager
     # After skills load, agents.yaml may have been updated with new skill agents
@@ -366,27 +494,22 @@ async def main(config_file: Path):
     updated_config = load_config(config_file)
     updated_agents = {agent["name"]: agent for agent in updated_config["agents"]}
 
-    # Re-register ALL agents (existing agents may have new tools added)
+    # Re-register all agents as existing agents may have new tools added
     # This ensures agent tool lists are current
     for name, agent in updated_agents.items():
-        if name not in agents:
-            # New agent - register it
-            tool_box.add_agent_tool(agent, run_agent)
-        else:
-            # Existing agent - update its registration to pick up new tools
-            # The agent may have had skill agents added to its tools list
-            tool_box.add_agent_tool(agent, run_agent)
+        tool_box.add_agent_tool(agent, run_agent)
 
-    agents = updated_agents  # Use the updated agents dict
-    _current_agents.update(agents)  # Update global registry
+    agents = updated_agents
+    _current_agents = get_current_agents()
+    _current_agents.update(agents)
 
     main_agent = config["main"]
     await run_agent(agents[main_agent], tool_box, None, interactive=True)
 
 
 if __name__ == "__main__":
-    # Check for web mode flag
     if "--web" in sys.argv:
+        # web_interface imported here to avoid circular dependency
         from web_interface import main as web_main
 
         web_main()
@@ -400,8 +523,7 @@ if __name__ == "__main__":
                 asyncio.run(main(Path(config_file)))
         except KeyboardInterrupt:
             print("\nInterrupted by user")
+            _handle_session_end_cli()
         except Exception as e:
             print(f"Error: {e}")
-            import traceback
-
             traceback.print_exc()

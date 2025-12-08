@@ -3,7 +3,6 @@ from pathlib import Path
 import concurrent.futures
 
 from config import load_config
-from agent import add_agent_tools, _current_agents
 
 from skill_decorators import (
     DEFAULT_SKILL_TIMEOUT,
@@ -131,6 +130,9 @@ def register_skill_management_tools(toolbox):
         Returns:
             dict: Result with success status and details about what was reloaded
         """
+        # Import here to avoid circular dependency
+        from agent_registry import get_current_agents, add_agent_tools
+        from agent import tool_box, run_agent
 
         skills_result = load_all_skill_functions("./agent/skills", toolbox)
 
@@ -138,10 +140,11 @@ def register_skill_management_tools(toolbox):
             config = load_config(Path("./agents.yaml"))
             new_agents = {agent["name"]: agent for agent in config["agents"]}
 
+            _current_agents = get_current_agents()
             _current_agents.update(new_agents)
 
             # Re-register all agent tools (including new skill agents)
-            add_agent_tools(new_agents, toolbox)
+            add_agent_tools(new_agents, toolbox, run_agent)
 
             return {
                 "success": True,

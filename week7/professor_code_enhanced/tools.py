@@ -339,6 +339,11 @@ class ToolBox:
             return kwargs
 
     def add_agent_tool(self, agent: Agent, run_agent):
+        # Remove existing agent tool if it exists to prevent duplicates
+        agent_name = agent["name"]
+        if agent_name in self._funcs:
+            del self._funcs[agent_name]
+        
         async def function(message: str) -> str:
             return await run_agent(agent, self, message, interactive=False)
 

@@ -55,11 +55,14 @@ class SimpleGradioInterface:
         """Override talk_to_user to use queues instead of stdin/stdout"""
 
         def web_talk_to_user(message: str) -> str:
-            # print(f"\n[AGENT] talk_to_user called with: {message[:50]}...")
+            # print(f"\n[AGENT] talk_to_user called with: {message[:100] if message else '(empty)'}...")
             # print(f"[AGENT] message_queue size before put: {message_queue.qsize()}")
 
-            message_queue.put(message)
-            # print(f"[AGENT] message_queue size after put: {message_queue.qsize()}")
+            if message:
+                message_queue.put(message)
+                # print(f"[AGENT] message_queue size after put: {message_queue.qsize()}")
+            # else:
+            #     print(f"[AGENT] Skipping empty message (initial prompt)")
 
             # print(f"[AGENT] Waiting for response from response_queue...")
             response = response_queue.get()
@@ -68,7 +71,7 @@ class SimpleGradioInterface:
             if response == RESET_SENTINEL:
                 raise AgentResetException("Agent session reset requested")
 
-            # print(f"[AGENT] Got response: {response[:50]}...")
+            # print(f"[AGENT] Got response: {response[:100] if response else '(empty)'}...")
             return response
 
         tool_box._funcs["talk_to_user"] = web_talk_to_user
@@ -207,28 +210,11 @@ class SimpleGradioInterface:
                 did_reset = True
                 self.reset_agent_session()
 
-                greeting_timeout = 5  # seconds
-                greeting_start = time.time()
-                while time.time() - greeting_start < greeting_timeout:
-                    if not message_queue.empty():
-                        # Consume the greeting without showing it
-                        message_queue.get()
-                        break
-                    time.sleep(0.1)
-
             # print(f"[WEB] send_message called with: {message}")
             # print(f"[WEB] message_queue.qsize(): {message_queue.qsize()}")
             # print(f"[WEB] response_queue.qsize(): {response_queue.qsize()}")
 
-            # Check if greeting is waiting (only for initial session, not after reset)
-            if not did_reset and not message_queue.empty():
-                greeting = message_queue.get()
-                # print(f"[WEB] Got greeting from queue: {greeting[:50]}...")
-                history.append({"role": "assistant", "content": greeting})
-            # else:
-            # print("[WEB] No greeting in queue")
             history.append({"role": "user", "content": message})
-            # Add loading message
             history.append({"role": "assistant", "content": "⏳ Processing..."})
             yield history, "Sending..."
 
@@ -239,7 +225,7 @@ class SimpleGradioInterface:
             while True:
                 if not message_queue.empty():
                     agent_response = message_queue.get()
-                    # print(f"[WEB] Got agent response: {agent_response[:50]}...")
+                    # print(f"[WEB] Got agent response: {agent_response[:100] if agent_response else '(empty)'}...")
                     # Replace loading message with actual response
                     history[-1] = {"role": "assistant", "content": agent_response}
                     yield history, "✅ Message sent"
@@ -252,7 +238,7 @@ class SimpleGradioInterface:
             error_msg = f"Error: {str(e)}\n{traceback.format_exc()}"
             # print(f"[WEB] Error in send_message: {error_msg}")
             history.append({"role": "assistant", "content": error_msg})
-            yield history, f"❌ {str(e)}"
+            yield history, f"{str(e)}"
 
     def launch(self, server_port: int = 7860):
         """Launch Gradio interface"""

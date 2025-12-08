@@ -1,15 +1,5 @@
-"""
-Sandbox manager for professor_code_enhanced skills
-
-Provides persistent, preloaded sandbox environments for skill execution.
-"""
-
 import asyncio
-import json
-import base64
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
-from contextlib import asynccontextmanager
+from typing import Dict, List, Optional, Any
 import time
 
 
@@ -54,14 +44,14 @@ class PersistentSandboxManager:
             if env_key in self.environments:
                 env_info = self.environments[env_key]
                 if time.time() - env_info["created_at"] < self.environment_ttl:
-                    print(f"🔄 Reusing persistent environment for {skill_name}")
+                    print(f"Reusing persistent environment for {skill_name}")
                     return env_info
                 else:
                     # Environment expired, clean it up
                     await self._cleanup_environment(env_key)
 
             # Create new environment
-            print(f"🚀 Creating new persistent environment for {skill_name}")
+            print(f"Creating new persistent environment for {skill_name}")
             env_info = await self._create_environment(
                 skill_name, language, preload_libraries
             )
@@ -112,9 +102,7 @@ class PersistentSandboxManager:
 
             # Install third-party libraries first (without trying to import yet)
             if third_party_libs:
-                print(
-                    f"📦 Installing third-party libraries: {', '.join(third_party_libs)}"
-                )
+                print(f"Installing third-party libraries: {', '.join(third_party_libs)}")
                 # Just run a simple command with libraries parameter to trigger installation
                 install_result = session.run(
                     code="print('Installation complete')",
@@ -122,20 +110,20 @@ class PersistentSandboxManager:
                     timeout=120,  # Longer timeout for installation
                 )
                 if install_result.exit_code != 0:
-                    print(f"⚠️  Warning: Installation issues: {install_result.stderr}")
+                    print(f"Warning: Installation issues: {install_result.stderr}")
 
             # Now preload/import all libraries (they should be installed by now)
             if all_libraries:
                 preload_code = self._get_preload_code(language, all_libraries)
                 if preload_code:
-                    print(f"📦 Importing libraries: {', '.join(all_libraries)}")
+                    print(f"Importing libraries: {', '.join(all_libraries)}")
                     result = session.run(
                         code=preload_code,
                         libraries=[],
                         timeout=60,  # Empty libraries list since already installed
                     )
                     if result.exit_code != 0:
-                        print(f"⚠️  Warning: Some library imports failed: {result.stderr}")
+                        print(f"Warning: Some library imports failed: {result.stderr}")
 
             return {
                 "session": session,
@@ -148,7 +136,7 @@ class PersistentSandboxManager:
             }
 
         except Exception as e:
-            print(f"❌ Failed to create environment for {skill_name}: {e}")
+            print(f"Failed to create environment for {skill_name}: {e}")
             raise
 
     def _get_preload_code(self, language: str, libraries: List[str]) -> str:
@@ -208,19 +196,17 @@ class PersistentSandboxManager:
             )
             session = env_info["session"]
 
-            print(f"🔧 Executing code for {skill_name} in persistent environment")
-            print(f"📦 Preloaded libraries: {', '.join(env_info['preloaded_libraries'])}")
+            print(f"Executing code for {skill_name} in persistent environment")
+            print(f"Preloaded libraries: {', '.join(env_info['preloaded_libraries'])}")
             if libraries:
-                print(f"📦 Additional libraries: {', '.join(libraries)}")
+                print(f"Additional libraries: {', '.join(libraries)}")
 
             # Execute code
             result = session.run(code=code, libraries=libraries or [], timeout=timeout)
 
-            # Update usage stats
             env_info["last_used"] = time.time()
             env_info["execution_count"] += 1
 
-            # Process results
             output = {
                 "success": result.exit_code == 0,
                 "exit_code": result.exit_code,
@@ -234,15 +220,13 @@ class PersistentSandboxManager:
                 "libraries_used": (env_info["preloaded_libraries"] + (libraries or [])),
             }
 
-            # Note: Plot handling removed - not using plots directory
-
             print(
-                f"✅ Execution complete (#{env_info['execution_count']} in this environment)"
+                f"Execution complete (#{env_info['execution_count']} in this environment)"
             )
             return output
 
         except Exception as e:
-            print(f"❌ Execution failed for {skill_name}: {e}")
+            print(f"Execution failed for {skill_name}: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -261,9 +245,9 @@ class PersistentSandboxManager:
                 # Close the session (this should cleanup the container)
                 if "session" in env_info:
                     env_info["session"].close()
-                    print(f"🧹 Cleaned up environment: {env_key}")
+                    print(f"Cleaned up environment: {env_key}")
             except Exception as e:
-                print(f"⚠️  Warning: Error cleaning up environment {env_key}: {e}")
+                print(f"Warning: Error cleaning up environment {env_key}: {e}")
             finally:
                 del self.environments[env_key]
 
@@ -283,7 +267,7 @@ class PersistentSandboxManager:
         env_keys = list(self.environments.keys())
         for env_key in env_keys:
             await self._cleanup_environment(env_key)
-        print("🧹 All sandbox environments cleaned up")
+        print("All sandbox environments cleaned up")
 
     def get_environment_stats(self) -> Dict[str, Any]:
         """Get statistics about current environments."""

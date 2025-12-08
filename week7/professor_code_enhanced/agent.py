@@ -381,37 +381,10 @@ async def run_agent(
 
     history = [{"role": "system", "content": agent["prompt"]}]
 
-    # Use GPT-4o for initial greeting with skills context
-    if message is None and agent["name"] == "user_interface":
-        try:
-            skills_result = await tool_box.run_tool("list_skills")
-            skills_context = f"\n\nAvailable skills: {skills_result.get('message', '')}"
-        except:
-            skills_context = ""
-
-        greeting_response = await client.responses.create(
-            input=[{"role": "system", "content": agent["prompt"] + skills_context}],
-            model="gpt-4o",
-            tools=[],
-            temperature=0.3,
-        )
-
-        for item in greeting_response.output:
-            if item.type == "message":
-                greeting_text = (
-                    item.content[0].text
-                    if isinstance(item.content, list)
-                    else str(item.content)
-                )
-                # Use talk_to_user tool to send greeting and get response
-                user_input = await tool_box.run_tool(
-                    "talk_to_user", message=greeting_text
-                )
-                break
-
+    if message is None:
+        user_input = await tool_box.run_tool("talk_to_user", message="")
         history.append({"role": "user", "content": user_input})
-
-    elif message is not None:
+    else:
         history.append({"role": "user", "content": message})
 
     while True:
@@ -419,10 +392,10 @@ async def run_agent(
         tools = tool_box.get_tools(agent["tools"])
 
         # Debug: print tool count
-        if len(tools) > 20:
-            print(
-                f"⚠️  Agent {agent['name']} has {len(tools)} tools (expected ~{len(agent['tools'])})"
-            )
+        # if len(tools) > 20:
+        #     print(
+        #         f"Agent {agent['name']} has {len(tools)} tools (expected ~{len(agent['tools'])})"
+        #     )
 
         response = await client.responses.create(
             input=history, model="gpt-5-mini", tools=tools, **agent.get("kwargs", {})
@@ -490,7 +463,7 @@ async def main(config_file: Path):
 
     # Skills are auto-loaded by the observer pattern in skill_manager
     # After skills load, agents.yaml may have been updated with new skill agents
-    # Reload config and re-register ALL agents to pick up tool list changes
+    # Reload config and re-register agents to pick up tool list changes
     updated_config = load_config(config_file)
     updated_agents = {agent["name"]: agent for agent in updated_config["agents"]}
 

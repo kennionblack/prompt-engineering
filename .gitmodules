@@ -1,0 +1,3 @@
+[submodule "ai-audio-transcriber"]
+	path = ai-audio-transcriber
+	url = git@github.com:kennionblack/ai-audio-transcriber.git
